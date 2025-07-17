@@ -1,8 +1,8 @@
-# For reference, e.g. ticker: 'CT'; contract: 'CTH4'
+# For reference, e.g. contract: 'CT'; contract: 'CTH4'
 from abc import ABC, abstractmethod
 
 
-class Ticker(ABC):
+class Contract(ABC):
     def __init__(self, instrument_id, source):
         self.instrument_id = instrument_id  # e.g., "CT"
         self.source = source                # SQLAlchemy engine or connection
@@ -14,15 +14,15 @@ class Ticker(ABC):
 
     @abstractmethod
     def load_ref_data(self):
-        """Load static metadata for the ticker."""
+        """Load static metadata for the contract."""
         pass
 
     @abstractmethod
-    def load_active_contracts(self, start_date, end_date):
-        """Load list of active contracts for the ticker within a date range."""
+    def load_contracts(self, start_date, end_date):
+        """Load list of active contracts for the contract within a date range."""
         pass
 
     @abstractmethod
-    def load_active_expiry_dates(self, start_date, end_date):
-        """Load list of expiry dates for active contracts for the ticker within a date range."""
+    def load_expiry_dates(self, start_date, end_date):
+        """Load list of expiry dates for active contracts for the contract within a date range."""
         pass
