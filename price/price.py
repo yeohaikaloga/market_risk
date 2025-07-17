@@ -22,11 +22,5 @@ class Price(ABC):
         print('load price')
         pass
 
-    @abstractmethod
-    def construct_curve(self):
-        """Construct a price curve for the instrument."""
-        print('construct curve')
-        pass
-
     def latest_price(self):
         return self.price_history.iloc[-1] if not self.price_history.empty else None
