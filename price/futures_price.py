@@ -1,15 +1,16 @@
 from .price import Price  # assuming Price is in price.py
 from contract.futures_contract import custom_monthly_contract_sort_key
-from contract.futures_contract import FuturesContract
 import pandas as pd
 from sqlalchemy import text
 
 
 class FuturesPrice(Price):  # Futures inherits from Price
 
-
-    def construct_curve(self):
-        pass
+    def __init__(self, instrument_id, source):
+        super().__init__(instrument_id, source)
+        self.instrument_id = instrument_id
+        self.source = source
+        self.contracts: list[str] | None = None
 
     def load_prices(self, start_date, end_date, selected_contracts=None, reindex_dates=None, instrument_id=None):
         self.contracts = selected_contracts or self.contracts

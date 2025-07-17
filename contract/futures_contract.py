@@ -2,8 +2,8 @@ import pandas as pd
 from sqlalchemy import text
 from contract.contract import Contract  # Adjust if your import path differs
 
-tickers_ref_dict = {'CT': {'futures_category': 'Fibers'},
-                        'VV': {'futures_category': 'Fibers'}}
+tickers_ref_dict = {'CT': {'futures_category': 'Fibers', 'conversion' : 22.046}, #clb to $/MT
+                        'VV': {'futures_category': 'Fibers'}, 'conversion' : 1} # yet to bring in forex
 class FuturesContract(Contract):
     def load_ref_data(self):
 

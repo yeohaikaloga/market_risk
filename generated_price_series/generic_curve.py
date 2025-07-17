@@ -18,16 +18,6 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         row = self.price_df.loc[date]
         return row[row.notna()]
 
-    def calculate_roll_dates(self, roll_days: int) -> dict:
-        roll_dates = {}
-        for contract in self.contracts:
-            valid_dates = self.price_df[contract].dropna().index
-            if not valid_dates.empty:
-                last_date = valid_dates[-1]
-                roll_idx = max(0, len(valid_dates) - 1 - roll_days)
-                roll_dates[contract] = valid_dates[roll_idx]
-        return roll_dates
-
     def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = 'none') -> pd.DataFrame:
         """
         Generate the N-th generic futures curve with optional early rolling and backward adjustment.
@@ -54,8 +44,6 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         # Load expiry and roll dates
         contract_expiry_dates = self.futures_contract.load_expiry_dates()
         contract_roll_dates = {k: v - pd.Timedelta(days=roll_days) for k, v in contract_expiry_dates.items()}
-        print(contract_expiry_dates)
-        print(contract_roll_dates)
 
         # STEP 1: Build unadjusted generic curve
         for date in index:
@@ -136,3 +124,26 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             generic_curve['adjustment_values'] = pd.Series(adjustment_values)
 
         return generic_curve
+
+    def generate_generic_curves_df_up_to(self, max_position: int, roll_days: int = 14,
+                                      adjustment: str = 'ratio', label_prefix: str = '') -> pd.DataFrame:
+        """
+        Generate and combine multiple generic curves (e.g., G1, G2, G3...) into one DataFrame.
+
+        Parameters:
+            max_position (int): Highest generic curve position to generate (inclusive).
+            roll_days (int): Days before expiry to roll.
+            adjustment (str): 'none', 'ratio', or 'difference'.
+            label_prefix (str): Optional prefix for column labels (e.g., instrument name).
+
+        Returns:
+            pd.DataFrame: Combined DataFrame with each generic curve in a separate column.
+        """
+        combined_df = pd.DataFrame(index=self.df.index)
+
+        for pos in range(1, max_position + 1):
+            curve = self.generate_generic_curve(position=pos, roll_days=roll_days, adjustment=adjustment)
+            col_name = f"{label_prefix}{pos}" if label_prefix else str(pos)
+            combined_df[col_name] = curve['final_price']
+
+        return combined_df
