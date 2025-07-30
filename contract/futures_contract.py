@@ -1,9 +1,11 @@
 import pandas as pd
 from sqlalchemy import text
-from contract.contract import Contract  # Adjust if your import path differs
+from contract.contract import Contract
 
-tickers_ref_dict = {'CT': {'futures_category': 'Fibers', 'conversion' : 22.046}, #clb to $/MT
-                        'VV': {'futures_category': 'Fibers'}, 'conversion' : 1} # yet to bring in forex
+tickers_ref_dict = {'CT': {'futures_category': 'Fibers', 'conversion': 22.046},  # clb to $/MT
+                    'VV': {'futures_category': 'Fibers'}, 'conversion': 1}  # yet to bring in forex
+
+
 class FuturesContract(Contract):
     def load_ref_data(self):
 
@@ -30,20 +32,21 @@ class FuturesContract(Contract):
                 row = df.iloc[0]
                 self.currency_id = row['currency_id']
                 self.futures_cat = row['futures_category']
-                # self.unit = row['unit']
-                # self.lot_size = row['lot_size']
-                # self.exchange = row['exchange']
+                self.unit = row.get('unit', None)
+                self.lot_size = row.get('lot_size', None)
+                self.exchange = row.get('exchange', None)
                 print(f"Loaded ref data for {self.instrument_id}: {self.currency_id}, {self.futures_cat} ,{self.unit}, "
                       f"{self.lot_size}, {self.exchange}")
             else:
                 print(f"No reference data found for instrument {self.instrument_id}")
 
-    def _load_contract_data(self) -> pd.DataFrame:
+    def _load_contract_data(self, relevant_months: set = None) -> pd.DataFrame:
         """
-        Internal method to fetch contract metadata (contract + expiry date).
+        Internal method to fetch contract metadata (contract + expiry date),
+        optionally filtering for specific contract months.
         """
         query = f"""
-            SELECT DISTINCT dc.ticker, dc.last_tradeable_dt
+            SELECT DISTINCT dc.ticker, dc.last_tradeable_dt, dc.fut_first_trade_dt
             FROM ref.derivatives_contract dc
             JOIN market.market_price mp 
                 ON dc.traded_contract_id = mp.traded_contract_id
@@ -59,26 +62,44 @@ class FuturesContract(Contract):
             df = pd.read_sql_query(text(query), conn)
 
         df['last_tradeable_dt'] = pd.to_datetime(df['last_tradeable_dt'], errors='coerce')
+        df['fut_first_trade_dt'] = pd.to_datetime(df['fut_first_trade_dt'], errors='coerce')
+
+        if relevant_months:
+            df = df[df['ticker'].str[-2].isin(relevant_months)]
+
         return df
-    def load_contracts(self) -> list:
+    def load_contracts(self, relevant_months=None) -> list:
         """
         Public method to load list of contract tickers.
         """
-        df = self._load_contract_data()
-        self.contracts = df['ticker'].dropna().tolist()
+        df = self._load_contract_data(relevant_months=relevant_months)
+        self.contracts = sorted(df['ticker'].dropna().tolist(), key=custom_monthly_contract_sort_key
+        )
         print(f"Loaded contracts for {self.instrument_id}: {self.contracts}")
         return self.contracts
 
-    def load_expiry_dates(self) -> dict:
+    def load_expiry_dates(self, relevant_months=None) -> dict:
         """
         Public method to load contract expiry dates as a dictionary.
         """
-        df = self._load_contract_data()
+        df = self._load_contract_data(relevant_months=relevant_months)
         self.expiry_dates = dict(zip(df['ticker'], df['last_tradeable_dt']))
         print(f"Loaded expiry dates for {self.instrument_id}:")
         for contract, expiry in self.expiry_dates.items():
             print(f"  {contract}: {expiry}")
         return self.expiry_dates
+
+    def load_start_dates(self, relevant_months=None) -> dict:
+        """
+        Public method to load contract expiry dates as a dictionary.
+        """
+        df = self._load_contract_data(relevant_months=relevant_months)
+        self.start_dates = dict(zip(df['ticker'], df['fut_first_trade_dt']))
+        print(f"Loaded start dates for {self.instrument_id}:")
+        for contract, start in self.start_dates.items():
+            print(f"  {contract}: {start}")
+        return self.start_dates
+
 
 def custom_monthly_contract_sort_key(futures_ticker):
     month_codes = {'F': 1, 'G': 2, 'H': 3, 'J': 4, 'K': 5, 'M': 6, 'N': 7, 'Q': 8, 'U': 9, 'V': 10, 'X': 11, 'Z': 12}
@@ -87,6 +108,4 @@ def custom_monthly_contract_sort_key(futures_ticker):
     month_char = futures_ticker[ticker_length - 2]
     year = 2000 + year_digit
     month = month_codes.get(month_char, 0)
-    return (year, month)
-
-
+    return year, month

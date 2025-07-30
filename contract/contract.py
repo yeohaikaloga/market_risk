@@ -1,16 +1,13 @@
 # For reference, e.g. contract: 'CT'; contract: 'CTH4'
 from abc import ABC, abstractmethod
+import pandas as pd
 
 
 class Contract(ABC):
-    def __init__(self, instrument_id, source):
-        self.instrument_id = instrument_id  # e.g., "CT"
-        self.source = source                # SQLAlchemy engine or connection
-        self.currency_id = None
-        self.unit = None
-        self.lot_size = None
-        self.exchange = None
-        self.active_contracts = []
+    def __init__(self, instrument_id, source, params=None):
+        self.instrument_id = instrument_id
+        self.source = source
+        self.params = params or {}
 
     @abstractmethod
     def load_ref_data(self):
@@ -18,8 +15,12 @@ class Contract(ABC):
         pass
 
     @abstractmethod
-    def load_contracts(self, start_date, end_date):
-        """Load list of active contracts for the contract within a date range."""
+    def _load_contract_data(self) -> pd.DataFrame:
+        pass
+
+    @abstractmethod
+    def load_contracts(self):
+        """Load list of contracts."""
         pass
 
     @abstractmethod

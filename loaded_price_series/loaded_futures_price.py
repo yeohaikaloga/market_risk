@@ -1,13 +1,14 @@
-from .price import Price  # assuming Price is in price.py
+from loaded_price_series.loaded_price_series import LoadedPrice
 from contract.futures_contract import custom_monthly_contract_sort_key
 import pandas as pd
 from sqlalchemy import text
 
 
-class FuturesPrice(Price):  # Futures inherits from Price
+class LoadedFuturesPrice(LoadedPrice):
 
     def __init__(self, instrument_id, source):
         super().__init__(instrument_id, source)
+        self.price_history = None
         self.instrument_id = instrument_id
         self.source = source
         self.contracts: list[str] | None = None
@@ -22,15 +23,19 @@ class FuturesPrice(Price):  # Futures inherits from Price
         contracts_formatted = "(" + ",".join(f"'{contract}'" for contract in self.contracts) + ")"
         print(contracts_formatted)
 
+        # Only include prices from start date and up to each contract's expiry to avoid spurious post-expiry data from BBG
+        # Use mp.px_settle_last_dt instead of tdate so that prices are not rolled over for market holidays
         query = f"""
-            SELECT mp.tdate::date as tdate, dc.ticker, mp.px_settle
+            SELECT mp.px_settle_last_dt::date as date, dc.ticker, mp.px_settle
             FROM ref.derivatives_contract dc
             JOIN market.market_price mp
             ON dc.traded_contract_id = mp.traded_contract_id
             JOIN ref.session_type st 
             ON dc.session_type_id = st.id
             WHERE dc.ticker IN {contracts_formatted}
-            AND mp.tdate BETWEEN '{start_date}' AND '{end_date}'
+            AND mp.px_settle_last_dt BETWEEN '{start_date}' AND '{end_date}'
+            AND mp.px_settle_last_dt <= dc.last_tradeable_dt
+            AND mp.px_settle_last_dt >= dc.fut_first_trade_dt
         """
         if instrument_id == 'CT':
             query += " AND dc.feed_source = 'eNYB'"
@@ -39,14 +44,14 @@ class FuturesPrice(Price):  # Futures inherits from Price
             df = pd.read_sql_query(text(query), conn)
 
         if df.empty:
-            print("No price data found for given parameters.")
+            print("No loaded_price_series data found for given parameters.")
             return pd.DataFrame()
 
         # Convert to datetime
-        df['tdate'] = pd.to_datetime(df['tdate'])
+        df['date'] = pd.to_datetime(df['date'])
 
         # Group by contract and date, take last px_settle for duplicates and unstack tickers as columns
-        price_df = df.groupby(['ticker', 'tdate'])['px_settle'].last().unstack(level=0)
+        price_df = df.groupby(['ticker', 'date'])['px_settle'].last().unstack(level=0)
 
         # Sort columns using your custom monthly contract sort key
         sorted_columns = sorted(price_df.columns, key=custom_monthly_contract_sort_key)

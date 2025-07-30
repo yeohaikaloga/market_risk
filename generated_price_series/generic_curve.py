@@ -10,14 +10,6 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         self.df = df
         self.futures_contract = futures_contract
 
-    def validate_data(self):
-        if self.price_df.empty:
-            raise ValueError("Price DataFrame is empty.")
-
-    def get_active_contracts(self, date):
-        row = self.price_df.loc[date]
-        return row[row.notna()]
-
     def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = 'none') -> pd.DataFrame:
         """
         Generate the N-th generic futures curve with optional early rolling and backward adjustment.
@@ -30,16 +22,24 @@ class GenericCurveGenerator(PriceSeriesGenerator):
 
         Returns:
         pd.DataFrame: DataFrame indexed by date with columns:
-            - 'price': The unadjusted price from the selected contract on each date.
-            - 'contract_to_use': The contract symbol selected on each date.
-            - 'final_price': The adjusted price series if adjustment is applied; otherwise same as 'price'.
+            - 'loaded_price_series': The unadjusted loaded_price_series from the selected contract on each date.
+            - 'active_contract': The contract symbol selected on each date.
+            - 'final_price': The adjusted loaded_price_series series if adjustment is applied; otherwise same as
+            'loaded_price_series'.
             - 'adjustment_values': The cumulative adjustment factor or difference applied on each date.
         """
+
+
+        valid_adjustments = {'none', 'ratio', 'difference'}
+        if adjustment not in valid_adjustments:
+            raise ValueError(f"Invalid adjustment method: {adjustment}. Must be one of {valid_adjustments}")
 
         df = self.df.sort_index(ascending=True)
         contracts = df.columns.tolist()
         index = df.index
-        generic_curve = pd.DataFrame(index=index, columns=['final_price', 'contract_to_use', 'price', 'adjustment_values'])
+        generic_curve = pd.DataFrame(index=index,
+                                     columns=['final_price', 'active_contract', 'loaded_price_series',
+                                              'adjustment_values'])
 
         # Load expiry and roll dates
         contract_expiry_dates = self.futures_contract.load_expiry_dates()
@@ -60,28 +60,27 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                         eligible_contracts.append(contract)
 
             if len(eligible_contracts) >= position:
-                contract_to_use = eligible_contracts[position - 1]
-                price = df.at[date, contract_to_use]
-                generic_curve.at[date, 'price'] = price
-                generic_curve.at[date, 'contract_to_use'] = contract_to_use
+                active_contract = eligible_contracts[position - 1]
+                price = df.at[date, active_contract]
+                generic_curve.at[date, 'loaded_price_series'] = price
+                generic_curve.at[date, 'active_contract'] = active_contract
             else:
-                generic_curve.at[date, 'price'] = pd.NA
-                generic_curve.at[date, 'contract_to_use'] = None
+                generic_curve.at[date, 'loaded_price_series'] = pd.NA
+                generic_curve.at[date, 'active_contract'] = None
 
+        print(generic_curve.head())
         # STEP 2: Apply backward adjustment if requested
         if adjustment.lower() in {'ratio', 'difference'}:
-            prev_contract = None
             cumulative_ratio = 1.0
             cumulative_diff = 0.0
             adjustment_values = {}
             adjusted_prices = {}
-
             prev_contract = None
             prev_date = None
 
             for date in reversed(index):
-                contract = generic_curve.at[date, 'contract_to_use']
-                price = generic_curve.at[date, 'price']
+                contract = generic_curve.at[date, 'active_contract']
+                price = generic_curve.at[date, 'loaded_price_series']
 
                 if pd.isna(price) or contract is None:
                     adjusted_prices[date] = pd.NA
@@ -123,10 +122,15 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             generic_curve['final_price'] = pd.Series(adjusted_prices)
             generic_curve['adjustment_values'] = pd.Series(adjustment_values)
 
+        else:
+            # No adjustment: just copy
+            generic_curve['final_price'] = generic_curve['loaded_price_series']
+            generic_curve['adjustment_values'] = pd.NA
+
         return generic_curve
 
     def generate_generic_curves_df_up_to(self, max_position: int, roll_days: int = 14,
-                                      adjustment: str = 'ratio', label_prefix: str = '') -> pd.DataFrame:
+                                         adjustment: str = 'none', label_prefix: str = '') -> pd.DataFrame:
         """
         Generate and combine multiple generic curves (e.g., G1, G2, G3...) into one DataFrame.
 

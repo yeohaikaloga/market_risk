@@ -1,5 +1,5 @@
 import pandas as pd
-from utils.date_utils import no_of_days_list
+from utils.date_utils import get_prev_biz_days_list
 
 def calculate_var(date: str, lookback_df: pd.DataFrame, inverse_df: pd.DataFrame, percentile: float = 95,
                   window: int = 260) -> pd.Series:
@@ -22,7 +22,7 @@ def calculate_var(date: str, lookback_df: pd.DataFrame, inverse_df: pd.DataFrame
 
     if lookback_df.empty or inverse_df.empty:
         print("Warning: One or both input DataFrames are empty. Returning zeros.")
-        index = no_of_days_list(date, window)
+        index = get_prev_biz_days_list(date, window)
         return pd.Series(0.0, index=index, name=f"VaR_{percentile:.1f}")
 
     lookback_df = lookback_df.sort_index()
