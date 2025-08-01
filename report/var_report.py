@@ -9,22 +9,18 @@ from financial_calculations.VaR import calculate_var
 
 
 def generate_var_report(instruments_list: list, cob_date: str, days_list: list[str], position: list[float],
-                        prod_engine) -> dict:
+                        engine, product) -> dict:
     # NOT COMPLETED YET
     for instrument in instruments_list:
         # Step 1: Load contract metadata
-        futures_contract = FuturesContract(instrument_id=instrument, source=prod_engine)
+        futures_contract = FuturesContract(instrument_id=instrument, source=engine)
         futures_contract.load_ref_data()
         contracts = futures_contract.load_contracts()
-        futures_expiry_dates = futures_contract.load_expiry_dates()
 
         # Step 2: Load loaded_price_series data for these contracts
-        futures_price = LoadedFuturesPrice(instrument_id=futures_contract.instrument_id, source=prod_engine)
+        futures_price = LoadedFuturesPrice(instrument_id=futures_contract.instrument_id, source=engine)
         if instrument == 'CT':
-            # active_contracts = [c for c in active_contracts if c[-2] in {'H', 'K', 'N', 'V', 'Z'}]
-            # active_contracts = [c for c in active_contracts if c[-2] in {'H', 'K', 'N', 'Z'}]
-            selected_contracts = ['CTV4', 'CTZ4', 'CTH5', 'CTK5', 'CTN5', 'CTV5', 'CTZ5',
-                                  'CTH6']  # to remove V contracts in future
+            selected_contracts = [c for c in active_contracts if c[-2] in {'H', 'K', 'N', 'Z'}]
         else:
             selected_contracts = contracts
         price_df = futures_price.load_prices(start_date=days_list[0],
