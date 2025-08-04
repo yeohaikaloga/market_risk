@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine
 from config import UAT_DB_PARAMS, PROD_DB_PARAMS
 from urllib.parse import quote_plus
 
@@ -23,4 +23,3 @@ def get_engine(db):
     )
 
     return create_engine(db_url)
-
