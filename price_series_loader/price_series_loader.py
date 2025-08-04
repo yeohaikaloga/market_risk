@@ -11,6 +11,6 @@ class LoadedPrice(ABC):
 
     @abstractmethod
     def load_prices(self, start_date, end_date):
-        """Load historical loaded_price_series data into price_history."""
-        print('load loaded_price_series')
+        """Load historical price_series_loader data into price_history."""
+        print('load price_series_loader')
         pass

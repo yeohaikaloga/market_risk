@@ -1,7 +1,7 @@
 from abc import ABC
 
 
-class LoadedPosition(ABC):
+class PositionLoader(ABC):
 
     def __init__(self, source, params=None):
         self.source = source

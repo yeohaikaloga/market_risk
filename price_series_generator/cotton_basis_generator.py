@@ -1,4 +1,4 @@
-from generated_price_series.generated_price_series import PriceSeriesGenerator
+from price_series_generator.generated_price_series import PriceSeriesGenerator
 from utils.date_utils import get_weekdays_between_list
 from utils.date_utils import get_prev_biz_days_list
 import numpy as np
@@ -84,7 +84,7 @@ class CottonBasisGenerator(PriceSeriesGenerator):
 
         print(f"\nProcessing {crop_name}...")
 
-        # Step 3: Basis logic: cotlook switch + contract switch + smoothing gic
+        # Step 3: Basis logic: cotlook switch + contract_ref_loader switch + smoothing gic
         valid_basis_columns = []
         basis_index = pd.to_datetime(get_weekdays_between_list(start_date, cob_date))
         crop_reindexed = crop_price_df_by_year.reindex(basis_index)
@@ -111,7 +111,7 @@ class CottonBasisGenerator(PriceSeriesGenerator):
                 # biz day in Aug)
                 crop_year_ar_switch_dates.append(crop_year_ar_switch)
 
-                # This is to allow Z contract to be taken against current and next crop year
+                # This is to allow Z contract_ref_loader to be taken against current and next crop year
                 contract_year = 2020 + int(contract[-1])
                 is_ctz_exception = (contract[2] == 'Z' and (contract_year == ref_next_year or
                                                             contract_year == ref_year))

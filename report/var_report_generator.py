@@ -1,9 +1,9 @@
 import pandas as pd
 import numpy as np
-from contract.futures_contract import FuturesContract
-from contract.futures_contract import tickers_ref_dict
-from loaded_price_series.loaded_futures_price import LoadedFuturesPrice
-from generated_price_series.generic_curve import GenericCurveGenerator
+from contract_ref_loader.derivatives_contract_ref_loader import FuturesContract
+from contract_ref_loader.derivatives_contract_ref_loader import instrument_ref_dict
+from price_series_loader.derivatives_price_loader import LoadedFuturesPrice
+from price_series_generator.generic_curve_generator import GenericCurveGenerator
 from financial_calculations.returns import relative_returns
 from financial_calculations.VaR import calculate_var
 
@@ -13,12 +13,12 @@ def cotton_var_report_workflow(instruments_list: list, cob_date: str, days_list:
     # NOT COMPLETED YET
     instruments_list = ['CT', 'VV', 'CCL', 'BO']
     for instrument in instruments_list:
-        # Step 1: Load contract metadata
+        # Step 1: Load contract_ref_loader metadata
         futures_contract = FuturesContract(instrument_id=instrument, source=engine)
         futures_contract.load_ref_data()
         contracts = futures_contract.load_contracts()
 
-        # Step 2: Load loaded_price_series data for these contracts
+        # Step 2: Load price_series_loader data for these contracts
         futures_price = LoadedFuturesPrice(instrument_id=futures_contract.instrument_id, source=engine)
         if instrument == 'CT':
             selected_contracts = [c for c in contracts if c[-2] in {'H', 'K', 'N', 'Z'}]
@@ -30,7 +30,7 @@ def cotton_var_report_workflow(instruments_list: list, cob_date: str, days_list:
                                              reindex_dates=days_list,
                                              instrument_id=instrument)
 
-        # Step 3: Generate generic loaded_price_series series for linear PnL vectors
+        # Step 3: Generate generic price_series_loader series for linear PnL vectors
         price_series = GenericCurveGenerator(price_df, futures_contract=futures_contract)
         generic_curves_df = price_series.generate_generic_curves_df_up_to(max_position=6,
                                                                           roll_days=14,
@@ -50,7 +50,7 @@ def cotton_var_report_workflow(instruments_list: list, cob_date: str, days_list:
 
         if method == 'L':
             pnl_mt_df = (relative_returns_df * generic_curves_df.loc[cob_date] *
-                         tickers_ref_dict[instrument]['conversion'] * position)
+                         instrument_ref_dict[instrument]['conversion'] * position)
         elif method == 'NL-S':
             pass
         elif method == 'NL-R':

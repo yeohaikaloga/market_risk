@@ -1,7 +1,7 @@
 #  from workflow.cotton_basis_workflow import fy24_cotton_basis_workflow
 from db.db_connection import get_engine
-from position.loaded_derivatives_position import LoadedDerivativesPosition
-#from position.loaded_physical_position import LoadedPhysicalsPosition
+from position_loader.derivatives_position_loader import DerivativesPositionLoader
+#from position_loader.physical_position_loader import PhysicalsPositionLoader
 import pandas as pd
 
 
@@ -20,16 +20,17 @@ if __name__ == '__main__':
 
 
     uat_engine = get_engine('uat')
-    COB_DATE = '2025-07-29'  # BUT THIS IS ACTUALLY FOR COB 2025-07-28 so need to insert one day after
-
+    COB_DATE = '2025-08-02'  # KEY HERE 2025-07-29 THIS IS ACTUALLY FOR COB 2025-07-28 so need to insert one day after
+    derivatives = DerivativesPositionLoader(date=COB_DATE,
+                                            source=uat_engine)  # will need to change to prod_engine later.
     # Load positions df
-    product = 'cotton'
-    if product == 'cotton':
-        derivatives = LoadedDerivativesPosition(date=COB_DATE, source=uat_engine)  # will need to change to prod_engine later.
-        deriv_pos_df = derivatives.load_position(date=COB_DATE, opera_product='cto')
-        print(deriv_pos_df.head())
-        print(deriv_pos_df.columns)
-        print(deriv_pos_df.derivative_type.unique())
+    product = 'rms'
+    deriv_pos_df = derivatives.load_position(date=COB_DATE, product=product)
+
+    print(deriv_pos_df.head())
+    print(deriv_pos_df.columns)
+    print(deriv_pos_df.derivative_type.unique())
+    deriv_pos_df.to_csv(f"position_{product}_{COB_DATE}.csv", index=False)
 
         #physicals = LoadedPhysicalsPosition(date=COB_DATE, source=uat_engine) # will need to change to prod_engine later.
         #phys_pos_df = physicals.load_position(date=COB_DATE, ors_product='cto') # check ors_product

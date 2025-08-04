@@ -1,8 +1,8 @@
-from position.loaded_position import LoadedPosition
+from position.position_loader import PositionLoader
 import pandas as pd
 from sqlalchemy import text
 
-class LoadedPhysicalPosition(LoadedPosition):
+class PhysicalPositionLoader(PositionLoader):
 
     def __init__(self, date, source):
         super().__init__(source)
@@ -15,7 +15,7 @@ class LoadedPhysicalPosition(LoadedPosition):
                        tr.id AS trader_id, tr.name AS trader_name,
                        cp.id AS counterparty_id, cp.counterparty_parent,
                        SUM(pos.total_active_lots) AS total_active_lots
-                FROM position_opera.position pos
+                FROM position_opera.position_loader pos
                 JOIN position_opera.sub_portfolio sp ON pos.sub_portfolio_id = sp.id
                 JOIN position_opera.portfolio pf ON sp.portfolio_id = pf.id
                 JOIN position_opera.counterparty cp ON pos.counterparty_id = cp.id

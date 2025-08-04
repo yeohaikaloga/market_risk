@@ -1,4 +1,4 @@
-from contract.contract import Contract
+from contract_ref_loader.contract import Contract
 import pandas as pd
 from sqlalchemy import text
 
@@ -95,7 +95,7 @@ class PhysicalContract(Contract):
         return df
 
     def load_expiry_dates(self, start_date, end_date):
-        """Load list of expiry dates for active contracts for the contract within a date range."""
+        """Load list of expiry dates for active contracts for the contract_ref_loader within a date range."""
         pass
 
     def load_shipment_month(self):

@@ -1,4 +1,4 @@
-# For reference, e.g. contract: 'CT'; contract: 'CTH4'
+# For reference, e.g. contract_ref_loader: 'CT'; contract_ref_loader: 'CTH4'
 from abc import ABC, abstractmethod
 import pandas as pd
 
@@ -11,7 +11,7 @@ class Contract(ABC):
 
     @abstractmethod
     def load_ref_data(self):
-        """Load static metadata for the contract."""
+        """Load static metadata for the contract_ref_loader."""
         pass
 
     @abstractmethod
@@ -25,5 +25,5 @@ class Contract(ABC):
 
     @abstractmethod
     def load_expiry_dates(self, start_date, end_date):
-        """Load list of expiry dates for active contracts for the contract within a date range."""
+        """Load list of expiry dates for active contracts for the contract_ref_loader within a date range."""
         pass

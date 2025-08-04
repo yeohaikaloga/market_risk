@@ -1,5 +1,5 @@
-from loaded_price_series.loaded_price_series import LoadedPrice
-from contract.futures_contract import custom_monthly_contract_sort_key
+from price_series_loader.loaded_price_series import LoadedPrice
+from contract_ref_loader.derivatives_contract_ref_loader import custom_monthly_contract_sort_key
 import pandas as pd
 from sqlalchemy import text
 
@@ -23,7 +23,7 @@ class LoadedFuturesPrice(LoadedPrice):
         contracts_formatted = "(" + ",".join(f"'{contract}'" for contract in self.contracts) + ")"
         print(contracts_formatted)
 
-        # Only include prices from start date and up to each contract's expiry to avoid spurious post-expiry data from BBG
+        # Only include prices from start date and up to each contract_ref_loader's expiry to avoid spurious post-expiry data from BBG
         # Use mp.px_settle_last_dt instead of tdate so that prices are not rolled over for market holidays
         query = f"""
             SELECT mp.px_settle_last_dt::date as date, dc.ticker, mp.px_settle
@@ -44,16 +44,16 @@ class LoadedFuturesPrice(LoadedPrice):
             df = pd.read_sql_query(text(query), conn)
 
         if df.empty:
-            print("No loaded_price_series data found for given parameters.")
+            print("No price_series_loader data found for given parameters.")
             return pd.DataFrame()
 
         # Convert to datetime
         df['date'] = pd.to_datetime(df['date'])
 
-        # Group by contract and date, take last px_settle for duplicates and unstack tickers as columns
+        # Group by contract_ref_loader and date, take last px_settle for duplicates and unstack tickers as columns
         price_df = df.groupby(['ticker', 'date'])['px_settle'].last().unstack(level=0)
 
-        # Sort columns using your custom monthly contract sort key
+        # Sort columns using your custom monthly contract_ref_loader sort key
         sorted_columns = sorted(price_df.columns, key=custom_monthly_contract_sort_key)
         price_df = price_df[sorted_columns]
 

@@ -1,4 +1,4 @@
-from loaded_price_series.loaded_price_series import LoadedPrice
+from price_series_loader.loaded_price_series import LoadedPrice
 import pandas as pd
 from sqlalchemy import text
 

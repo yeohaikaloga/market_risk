@@ -2,12 +2,12 @@ import pandas as pd
 from db.db_connection import get_engine
 from utils.date_utils import get_prev_biz_days_list
 from datetime import datetime
-from contract.futures_contract import FuturesContract
-from loaded_price_series.loaded_futures_price import LoadedFuturesPrice
-from loaded_price_series.loaded_physical_price import LoadedPhysicalPrice
-from generated_price_series.cotton_basis import CottonBasisGenerator
-from generated_price_series.cotton_basis import crop_dict
-from contract.physical_contract import PhysicalContract
+from contract_ref_loader.derivatives_contract_ref_loader import FuturesContract
+from price_series_loader.derivatives_price_loader import LoadedFuturesPrice
+from price_series_loader.physical_price_loader import LoadedPhysicalPrice
+from price_series_generator.cotton_basis_generator import CottonBasisGenerator
+from price_series_generator.cotton_basis_generator import crop_dict
+from contract_ref_loader.physical_contract_ref_loader import PhysicalContract
 
 
 def fy24_cotton_basis_workflow(write_to_excel: bool = True, apply_smoothing: bool = True):
@@ -19,7 +19,7 @@ def fy24_cotton_basis_workflow(write_to_excel: bool = True, apply_smoothing: boo
     biz_days = get_prev_biz_days_list(date=cob_date, no_of_days=no_of_days)
     start_date = biz_days[0]
 
-    # Step 1: Import cotton contract prices
+    # Step 1: Import cotton contract_ref_loader prices
     instrument = 'CT'
     futures_contract = FuturesContract(instrument_id=instrument, source=prod_engine)
     selected_months = {'H', 'K', 'N', 'Z'}
@@ -29,7 +29,7 @@ def fy24_cotton_basis_workflow(write_to_excel: bool = True, apply_smoothing: boo
     roll_days = 14
     contract_roll_dates = {k: v - pd.Timedelta(days=roll_days) for k, v in contract_expiry_dates.items()}
 
-    # Step 2: Load loaded_price_series data for these contracts
+    # Step 2: Load price_series_loader data for these contracts
     futures_price = LoadedFuturesPrice(instrument_id=futures_contract.instrument_id, source=prod_engine)
     futures_price_df = futures_price.load_prices(start_date=start_date,
                                                  end_date=cob_date,

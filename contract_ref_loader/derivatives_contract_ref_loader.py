@@ -1,8 +1,8 @@
 import pandas as pd
 from sqlalchemy import text
-from contract.contract import Contract
+from contract_ref_loader.contract import Contract
 
-tickers_ref_dict = {'CT': {'futures_category': 'Fibers', 'conversion': 22.046},  # clb to $/MT
+instrument_ref_dict = {'CT': {'futures_category': 'Fibers', 'conversion': 22.046},  # clb to $/MT
                     'VV': {'futures_category': 'Fibers'}, 'conversion': 1}  # yet to bring in forex
 
 
@@ -12,11 +12,11 @@ class FuturesContract(Contract):
         instrument_key = self.instrument_id
         instrument_length = len(instrument_key)
 
-        if instrument_key not in tickers_ref_dict:
+        if instrument_key not in instrument_ref_dict:
             print(f"Instrument '{instrument_key}' not found in reference dictionary.")
             return pd.DataFrame()
 
-        futures_category = tickers_ref_dict[instrument_key]['futures_category']
+        futures_category = instrument_ref_dict[instrument_key]['futures_category']
         query = f"""
         SELECT DISTINCT currency_id, ticker, futures_category
         FROM ref.derivatives_contract
@@ -42,8 +42,8 @@ class FuturesContract(Contract):
 
     def _load_contract_data(self, relevant_months: set = None) -> pd.DataFrame:
         """
-        Internal method to fetch contract metadata (contract + expiry date),
-        optionally filtering for specific contract months.
+        Internal method to fetch contract_ref_loader metadata (contract_ref_loader + expiry date),
+        optionally filtering for specific contract_ref_loader months.
         """
         query = f"""
             SELECT DISTINCT dc.ticker, dc.last_tradeable_dt, dc.fut_first_trade_dt
@@ -70,7 +70,7 @@ class FuturesContract(Contract):
         return df
     def load_contracts(self, relevant_months=None) -> list:
         """
-        Public method to load list of contract tickers.
+        Public method to load list of contract_ref_loader tickers.
         """
         df = self._load_contract_data(relevant_months=relevant_months)
         self.contracts = sorted(df['ticker'].dropna().tolist(), key=custom_monthly_contract_sort_key
@@ -80,7 +80,7 @@ class FuturesContract(Contract):
 
     def load_expiry_dates(self, relevant_months=None) -> dict:
         """
-        Public method to load contract expiry dates as a dictionary.
+        Public method to load contract_ref_loader expiry dates as a dictionary.
         """
         df = self._load_contract_data(relevant_months=relevant_months)
         self.expiry_dates = dict(zip(df['ticker'], df['last_tradeable_dt']))
@@ -91,7 +91,7 @@ class FuturesContract(Contract):
 
     def load_start_dates(self, relevant_months=None) -> dict:
         """
-        Public method to load contract expiry dates as a dictionary.
+        Public method to load contract_ref_loader expiry dates as a dictionary.
         """
         df = self._load_contract_data(relevant_months=relevant_months)
         self.start_dates = dict(zip(df['ticker'], df['fut_first_trade_dt']))
