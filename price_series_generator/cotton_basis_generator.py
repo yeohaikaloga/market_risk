@@ -1,4 +1,4 @@
-from price_series_generator.generated_price_series import PriceSeriesGenerator
+from price_series_generator.price_series_generator import PriceSeriesGenerator
 from utils.date_utils import get_weekdays_between_list
 from utils.date_utils import get_prev_biz_days_list
 import numpy as np
@@ -80,7 +80,7 @@ class CottonBasisGenerator(PriceSeriesGenerator):
 
         start_date = self.start_date
         cob_date = self.cob_date
-        crop_name = physical_contract.instrument_id
+        crop_name = physical_contract.instrument_name
 
         print(f"\nProcessing {crop_name}...")
 
@@ -97,7 +97,8 @@ class CottonBasisGenerator(PriceSeriesGenerator):
         crop_year_ar_switch_dates = []
 
         for contract in self.futures_price_df.columns:
-            contract_expiry = self.contract_expiry_dates[contract]
+            full_contract_name = contract + ' Comdty'
+            contract_expiry = self.contract_expiry_dates[full_contract_name]
             for crop_year in crop_price_df_by_year.columns:
                 if physical_contract.crop_year_type == 'cross':
                     ref_year, ref_next_year = map(int, crop_year.split("/"))
@@ -158,7 +159,7 @@ class CottonBasisGenerator(PriceSeriesGenerator):
         basis_df = pd.DataFrame()
 
         for physical_contract, crop_price_df_by_year in physical_contracts_and_prices:
-            crop_name = physical_contract.instrument_id
+            crop_name = physical_contract.instrument_name
             crop_basis_df = self.generate_crop_basis(physical_contract=physical_contract,
                                                      crop_price_df_by_year=crop_price_df_by_year)
             print(f"Generated basis for {crop_name}")

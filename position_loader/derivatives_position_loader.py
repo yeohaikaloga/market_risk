@@ -13,13 +13,8 @@ class DerivativesPositionLoader(PositionLoader):
 
         ## TO IMPLEMENT ADDITIONAL JOIN TO REGION/BOOK HIERARCHY TABLE FOR COTTON
 
-        product_map = {
-            'cotton': ['cto'],
-            'rms-cfs': ['cfs'],
-            'rms': ['cfs', 'rmc'],
-            'rubber': ['rba', 'rbc']
-            # Add others like 'rubber', 'wood', etc. as needed
-        }
+        product_map = {'cotton': ['cto'], 'rms-cfs': ['cfs'], 'rms': ['cfs', 'rmc'], 'rubber': ['rba', 'rbc']}
+        # Add others like 'wood', etc. as needed
 
         if product not in product_map:
             raise ValueError(f"Unsupported product: {product}")
@@ -27,27 +22,17 @@ class DerivativesPositionLoader(PositionLoader):
         opera_products = product_map[product]
 
         # Core SELECT and GROUP BY columns
-        select_cols = [
-            "pos.tdate", "sp.subportfolio", "pf.portfolio",
-            "sec.security_id", "sec.strike", "sec.derivative_type", "sec.currency",
-            "SUM(pos.total_active_lots) AS total_active_lots"
-        ]
+        select_cols = ["pos.tdate", "sp.subportfolio", "pf.portfolio", "sec.security_id", "sec.strike",
+                       "sec.derivative_type", "sec.currency", "SUM(pos.total_active_lots) AS total_active_lots"]
         group_by_cols = select_cols[:-1]  # everything except the aggregate
 
-        joins = [
-            "JOIN position_opera.sub_portfolio sp ON pos.sub_portfolio_id = sp.id",
-            "JOIN position_opera.portfolio pf ON sp.portfolio_id = pf.id",
-            "JOIN position_opera.security sec ON pos.risk_security_id = sec.id"
-        ]
-        where_conditions = [
-            "pos.opera_product IN :opera_products",
-            "pos.tdate = :date",
-            "sp.subportfolio != 'CONSO-CT'"
-        ]
-        params = {
-            "opera_products": tuple(opera_products),  # tuple for SQLAlchemy IN clause
-            "date": date
-        }
+        joins = ["JOIN position_opera.sub_portfolio sp ON pos.sub_portfolio_id = sp.id",
+                 "JOIN position_opera.portfolio pf ON sp.portfolio_id = pf.id",
+                 "JOIN position_opera.security sec ON pos.risk_security_id = sec.id"]
+        where_conditions = ["pos.opera_product IN :opera_products", "pos.tdate = :date",
+                            "sp.subportfolio != 'CONSO-CT'"]
+        params = {"opera_products": tuple(opera_products),
+                  "date": date}  # tuple for SQLAlchemy IN clause
 
         # Optional trader
         if trader_id is not None:

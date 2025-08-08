@@ -1,12 +1,13 @@
-from contract_ref_loader.contract import Contract
+from contract_ref_loader.contract_ref_loader import ContractRefLoader
 import pandas as pd
 from sqlalchemy import text
 
 
-class PhysicalContract(Contract):
+class PhysicalContractRefLoader(ContractRefLoader):
 
-    def __init__(self, instrument_id, source, params=None):
-        super().__init__(instrument_id, source, params)
+    def __init__(self, instrument_name, source, params=None):
+        super().__init__(instrument_name=instrument_name, source=source, params=params)
+        self.instrument_name = instrument_name
         self.grade = self.params.get("grade")
         self.origin = self.params.get("origin")
         self.type = self.params.get("type")
@@ -17,17 +18,20 @@ class PhysicalContract(Contract):
         self.crop_year_type = 'cross' if '/' in crop_year else 'straight'
 
     def load_ref_data(self) -> pd.DataFrame:
-        external_name_filter = f"pc.external_name = '{self.instrument_id}'"
-        if self.instrument_id == 'A Index':
-            external_name_filter = f"pc.external_name LIKE '%A Index'"  # Match '2024/2025 A Index' etc.
+        if self.instrument_name == 'A Index':
+            external_name_filter = "pc.external_name LIKE '%A Index'"  # match variants like '2024/2025 A Index'
+        else:
+            external_name_filter = f"pc.external_name = '{self.instrument_name}'"
+
         query = f"""
-            SELECT DISTINCT pc.external_name, pi.origin, pi.type, pi.grade, pi.crop_year
-            FROM ref.physical_contract pc 
-            JOIN market.physical_market_price pmp ON pc.traded_contract_id = pmp.traded_contract_id
-            JOIN ref.physical_instrument pi ON pi.id = pc.instrument_id
-            WHERE pmp.data_source = '{self.data_source}'
-            AND {external_name_filter}
-        """
+                    SELECT DISTINCT pc.external_name, pi.origin, pi.type, pi.grade, pi.crop_year
+                    FROM ref.physical_contract pc 
+                    JOIN market.physical_market_price pmp ON pc.traded_contract_id = pmp.traded_contract_id
+                    JOIN ref.physical_instrument pi ON pi.id = pc.instrument_id
+                    WHERE pmp.data_source = '{self.data_source}'
+                      AND {external_name_filter}
+                """
+
         if self.grade:
             query += f" AND pi.grade = '{self.grade}'"
         if self.origin:
@@ -46,31 +50,7 @@ class PhysicalContract(Contract):
             self.grade = row['grade']
             self.type = row['type']
             self.determine_crop_year_type(row['crop_year'])
-        return df
 
-    def _load_contract_data(self) -> pd.DataFrame:
-        query = f"""
-            SELECT pmp.tdate, pmp.px_settle, pc.external_name, pc.shipment_month,
-                   pi.origin, pi.type, pi.grade, pi.crop_year, pi.crop_year_label
-            FROM ref.physical_contract pc 
-            JOIN market.physical_market_price pmp ON pc.traded_contract_id = pmp.traded_contract_id
-            JOIN ref.physical_instrument pi ON pi.id = pc.instrument_id
-            WHERE pmp.data_source = '{self.data_source}'
-            AND pc.external_name = '{self.instrument_id}'
-        """
-        if self.grade:
-            query += f" AND pi.grade = '{self.grade}'"
-        if self.origin:
-            query += f" AND pi.origin = '{self.origin}'"
-        if self.type:
-            query += f" AND pi.type = '{self.type}'"
-
-        query += " ORDER BY pmp.tdate DESC LIMIT 100"
-
-        with self.source.connect() as conn:
-            df = pd.read_sql_query(text(query), conn)
-
-        df['tdate'] = pd.to_datetime(df['tdate'], errors='coerce')
         return df
 
     def load_contracts(self):
@@ -81,7 +61,7 @@ class PhysicalContract(Contract):
             ON pc.traded_contract_id = pmp.traded_contract_id
             JOIN ref.physical_instrument pi 
             ON pi.id = pc.instrument_id
-            WHERE pc.external_name = '{self.instrument_id}'
+            WHERE pc.external_name = '{self.instrument_name}'
         """
         if self.grade:
             query += f" AND pi.grade = '{self.grade}'"

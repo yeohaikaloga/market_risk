@@ -1,11 +1,11 @@
-from contract_ref_loader.derivatives_contract_ref_loader import FuturesContract
-from price_series_generator.generated_price_series import PriceSeriesGenerator
+from contract_ref_loader.derivatives_contract_ref_loader import DerivativesContractRefLoader
+from price_series_generator.price_series_generator import PriceSeriesGenerator
 import pandas as pd
 
 
 class GenericCurveGenerator(PriceSeriesGenerator):
 
-    def __init__(self, df: pd.DataFrame, futures_contract: FuturesContract):
+    def __init__(self, df: pd.DataFrame, futures_contract: DerivativesContractRefLoader):
         super().__init__(df)
         self.df = df
         self.futures_contract = futures_contract
@@ -36,31 +36,35 @@ class GenericCurveGenerator(PriceSeriesGenerator):
 
         df = self.df.sort_index(ascending=True)
         contracts = df.columns.tolist()
+        print('columns:', contracts)
         index = df.index
         generic_curve = pd.DataFrame(index=index,
                                      columns=['final_price', 'active_contract', 'price_series_loader',
                                               'adjustment_values'])
 
         # Load expiry and roll dates
-        contract_expiry_dates = self.futures_contract.load_expiry_dates()
+        contract_expiry_dates = self.futures_contract.load_underlying_futures_expiry_dates(mode='futures')
         contract_roll_dates = {k: v - pd.Timedelta(days=roll_days) for k, v in contract_expiry_dates.items()}
+        print('expiry:', contract_expiry_dates)
+        print('roll:', contract_roll_dates)
 
         # STEP 1: Build unadjusted generic curve
         for date in index:
             eligible_contracts = []
             for contract in contracts:
+                full_contract_name = contract + ' Comdty'
                 price = df.at[date, contract]
                 if pd.notna(price):
-                    roll_date = contract_roll_dates[contract]
-                    expiry_date = contract_expiry_dates[contract]
+                    roll_date = contract_roll_dates[full_contract_name]
+                    expiry_date = contract_expiry_dates[full_contract_name]
                     if roll_date is None or expiry_date is None:
                         continue  # skip if info missing
 
                     if date <= roll_date:
-                        eligible_contracts.append(contract)
+                        eligible_contracts.append(full_contract_name)
 
             if len(eligible_contracts) >= position:
-                active_contract = eligible_contracts[position - 1]
+                active_contract = eligible_contracts[position - 1].replace(" Comdty","")
                 price = df.at[date, active_contract]
                 generic_curve.at[date, 'price_series_loader'] = price
                 generic_curve.at[date, 'active_contract'] = active_contract

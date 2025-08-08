@@ -1,9 +1,9 @@
-from price_series_loader.loaded_price_series import LoadedPrice
+from price_series_loader.price_series_loader import PriceLoader
 import pandas as pd
 from sqlalchemy import text
 
 
-class LoadedPhysicalPrice(LoadedPrice):
+class PhysicalPriceLoader(PriceLoader):
 
     def load_prices(self, start_date, end_date, reindex_dates=None, instrument_id=None) -> pd.DataFrame:
         instrument_id = instrument_id or self.instrument_id
@@ -15,8 +15,9 @@ class LoadedPhysicalPrice(LoadedPrice):
         if instrument_id == 'A Index':
             external_name_filter = f"pc.external_name LIKE '%A Index'"
 
+        # DISTINCT should not have to be there...
         query = f"""
-            SELECT pmp.tdate, pmp.px_settle, pc.external_name, pc.shipment_month, 
+            SELECT DISTINCT pmp.tdate, pmp.px_settle, pc.external_name, pc.shipment_month, 
                    pi.origin, pi.type, pi.grade, pi.crop_year, pi.crop_year_label
             FROM ref.physical_contract pc 
             JOIN market.physical_market_price pmp 
