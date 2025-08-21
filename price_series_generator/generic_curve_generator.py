@@ -134,8 +134,10 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         return generic_curve
 
     def generate_generic_curves_df_up_to(self, max_position: int, roll_days: int = 14,
-                                         adjustment: str = 'none', label_prefix: str = '') -> pd.DataFrame:
+                                         adjustment: str = 'none', label_prefix: str = '') \
+            -> tuple[pd.DataFrame, pd.DataFrame]:
         """
+
         Generate and combine multiple generic curves (e.g., G1, G2, G3...) into one DataFrame.
 
         Parameters:
@@ -145,13 +147,17 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             label_prefix (str): Optional prefix for column labels (e.g., instrument name).
 
         Returns:
-            pd.DataFrame: Combined DataFrame with each generic curve in a separate column.
+        Tuple of:
+            - Combined DataFrame of adjusted prices (final_price) for each generic curve
+            - Combined DataFrame of active contract names tagged to each curve on each date
         """
         combined_df = pd.DataFrame(index=self.df.index)
+        active_contracts_df = pd.DataFrame(index=self.df.index)
 
         for pos in range(1, max_position + 1):
             curve = self.generate_generic_curve(position=pos, roll_days=roll_days, adjustment=adjustment)
             col_name = f"{label_prefix}{pos}" if label_prefix else str(pos)
             combined_df[col_name] = curve['final_price']
+            active_contracts_df[col_name] = curve['active_contract']
 
-        return combined_df
+        return combined_df, active_contracts_df

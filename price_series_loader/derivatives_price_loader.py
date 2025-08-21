@@ -66,9 +66,7 @@ class DerivativesPriceLoader(PriceLoader):
         price_df.columns = [col.replace(' Comdty', '') for col in price_df.columns]
         # Sort columns using your custom monthly contract_ref_loader sort key
         sorted_columns = sorted(price_df.columns,
-                                key=lambda ticker: custom_monthly_contract_sort_key(contract=ticker,
-                                                                                    instrument_name=instrument_name or
-                                                                                                    self.instrument_id))
+                                key=lambda ticker: custom_monthly_contract_sort_key(contract=ticker))
         price_df = price_df[sorted_columns]
 
         # Reindex dates

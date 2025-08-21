@@ -26,7 +26,7 @@ def options_workflow():
                                                      contracts=futures_contracts,
                                                      reindex_dates=days_list,
                                                      instrument_name=instrument)
-        print(futures_price_df)
+        print(futures_price_df.head())
         # print(vars(futures_price))
         # print('end')
 
@@ -45,6 +45,6 @@ def options_workflow():
                                                      contracts=options_contracts,
                                                      reindex_dates=days_list,
                                                      instrument_name=instrument)
-        print(options_price_df)
+        print(options_price_df.head())
         # print(vars(options_price))
         print('end')

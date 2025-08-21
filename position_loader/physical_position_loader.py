@@ -45,7 +45,7 @@ class PhysicalPositionLoader(PositionLoader):
         base_query += '''
                 GROUP BY pos.tdate, sp.subportfolio, pf.portfolio, sec.security_id, sec.strike, sec.derivative_type,
                          tr.id, tr.name, cp.id, cp.counterparty_parent
-            '''
+            '''`
 
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(base_query), conn, params=params)

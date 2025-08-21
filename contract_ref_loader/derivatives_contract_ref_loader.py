@@ -4,26 +4,28 @@ from contract_ref_loader.contract_ref_loader import ContractRefLoader
 from utils.contract_utils import month_codes
 from utils.contract_utils import custom_monthly_contract_sort_key
 
-instrument_ref_dict = {'CT': {'futures_category': 'Fibers', 'conversion': 22.046},
-                       'VV': {'futures_category': 'Fibers', 'conversion': 1},
-                       'CCL': {'futures_category': 'Fibers', 'conversion': 1},
+instrument_ref_dict = {'CT': {'futures_category': 'Fibers', 'to_USD_conversion': 2204.6/100, 'currency': 'USc',
+                              'units': 'lbs', 'lots_to_MT_conversion': 22.679851220176},
+                       'VV': {'futures_category': 'Fibers', 'to_USD_conversion': 1, 'currency': 'CNY', 'units': 'MT',
+                              'lots_to_MT_conversion': 5},
+                       'CCL': {'futures_category': 'Fibers', 'to_USD_conversion': 1000/355.56, 'currency': 'INR',
+                               'units': 'candy', 'MT_conversion': 22.679851220176},
                        'OR': {'futures_category': 'Industrial Material'},
                        'JN': {'futures_category': 'Industrial Material'},
                        'SRB': {'futures_category': 'Industrial Material'},
                        'RT': {'futures_category': 'Industrial Material'},
                        'BDR': {'futures_category': 'Industrial Material'},
                        'RG': {'futures_category': 'Industrial Material'},
-                       'C ': {'futures_category': 'Corn'},
+                       'C ': {'futures_category': 'Corn', 'to_USD_conversion': 39.36821/100, 'currency': 'USc'},
                        'EP': {'futures_category': 'Corn'},
                        'CRD': {'futures_category': 'Corn'},
                        'AC': {'futures_category': 'Corn'},
                        'CA': {'futures_category': 'Wheat'},
-                       'W ': {'futures_category': 'Wheat'},
+                       'W ': {'futures_category': 'Wheat', 'to_USD_conversion': 36.74371/100, 'currency': 'USc'},
                        'KW': {'futures_category': 'Wheat'},
                        'MW': {'futures_category': 'Wheat'},
-                       'SB': {'futures_category': 'Wheat'},
                        'KFP': {'futures_category': 'Wheat'},
-                       'S ': {'futures_category': 'Soy'},
+                       'S ': {'futures_category': 'Soy', 'to_USD_conversion': 36.74371/100, 'currency': 'USc'},
                        'SM': {'futures_category': 'Soy'},
                        'BO': {'futures_category': 'Soy'},
                        'AE': {'futures_category': 'Soy'},
@@ -35,6 +37,8 @@ instrument_ref_dict = {'CT': {'futures_category': 'Fibers', 'conversion': 22.046
                        'QS': {'futures_category': 'Refined Products'},
                        'THE': {'futures_category': 'Refined Products'},
                        'HO': {'futures_category': 'Refined Products'},
+                        'SB': {'futures_category': 'Foodstuff', 'to_USD_conversion': 2204.6/100, 'currency': 'USc',
+                               'units': 'lbs'},
                        'QW': {'futures_category': 'Foodstuff'},
                        'DF': {'futures_category': 'Foodstuff'},
                        'CC': {'futures_category': 'Foodstuff'},
@@ -64,16 +68,17 @@ class DerivativesContractRefLoader(ContractRefLoader):
     def _build_ticker_regex(self, mode):
         month_letters = ''.join(month_codes.keys())
         base_pattern = f"^{self.instrument_name}[{month_letters}][0-9]"
+        suffix_pattern = r"(?: COMB)? Comdty$"
 
         if mode == 'futures':
-            pattern = base_pattern + " Comdty$"           # e.g. CTK4
+            pattern = base_pattern + suffix_pattern           # e.g. CTK4
         elif mode == 'options':
-            pattern = base_pattern + "[A-Z] \\d+ Comdty$"     # e.g. CTK4P
+            pattern = base_pattern + r"[A-Z] \d+" + suffix_pattern     # e.g. CTK4P
         elif mode == 'spreads':
-            pattern = (f"^{self.instrument_name}[{month_letters}][0-9]{self.instrument_name}[{month_letters}]"
-                       f"[0-9] Comdty$")
+            pattern = (f"^{self.instrument_name}[{month_letters}][0-9]"
+                       f"{self.instrument_name}[{month_letters}][0-9]" + suffix_pattern)
         else:
-            pattern = base_pattern + " Comdty$"    # futures or options, e.g. CTK4 or CTK4P
+            pattern = base_pattern + suffix_pattern    # futures or options, e.g. CTK4 or CTK4P
 
         print(f"Regex pattern: {pattern}")
         return pattern
@@ -120,11 +125,11 @@ class DerivativesContractRefLoader(ContractRefLoader):
             c.currency, dc.real_underlying_ticker, dc.fut_first_trade_dt, dc.opt_first_trade_dt, dc.last_tradeable_dt, 
             dc.opt_expire_dt
             FROM ref.derivatives_contract dc
-            JOIN ref.currency c
+            LEFT JOIN ref.currency c
             ON c.id = dc.currency_id 
-            JOIN ref.instrument i
+            LEFT JOIN ref.instrument i
             on i.id = dc.instrument_id
-            JOIN ref.traded_contract tc
+            LEFT JOIN ref.traded_contract tc
             on tc.id = dc.traded_contract_id
             WHERE dc.unique_id_fut_opt ~ '{regex_pattern}'
             AND dc.futures_category = '{futures_category}'
@@ -173,8 +178,7 @@ class DerivativesContractRefLoader(ContractRefLoader):
         if df.empty:
             return []
         return sorted(df['unique_id_fut_opt'].tolist(),
-                      key=lambda contract: custom_monthly_contract_sort_key(contract=contract,
-                                                                            instrument_name=self.instrument_name))
+                      key=lambda contract: custom_monthly_contract_sort_key(contract=contract))
 
     def load_underlying_futures(self, **kwargs) -> dict:
         df = self.load_tickers(mode='options', **kwargs)
