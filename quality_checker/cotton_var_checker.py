@@ -2,7 +2,7 @@ import pandas as pd
 from utils.contract_utils import custom_monthly_contract_sort_key
 
 def check_derivatives_positions(df):
-    check_deriv_pos_df = df[df['total_active_lots'] != 0]
+    check_deriv_pos_df = df.copy()
     check_deriv_pos_df = check_deriv_pos_df[
         (~check_deriv_pos_df['portfolio'].str.contains('MILL OPTNS'))  # filter out MILL OPTNS from UNIT_SD
         & (~check_deriv_pos_df['books'].isin(

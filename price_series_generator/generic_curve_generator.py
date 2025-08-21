@@ -53,6 +53,8 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             eligible_contracts = []
             for contract in contracts:
                 full_contract_name = contract + ' Comdty'
+                if full_contract_name not in contract_roll_dates.keys():
+                    full_contract_name = contract + ' COMB Comdty'
                 price = df.at[date, contract]
                 if pd.notna(price):
                     roll_date = contract_roll_dates[full_contract_name]
@@ -64,7 +66,7 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                         eligible_contracts.append(full_contract_name)
 
             if len(eligible_contracts) >= position:
-                active_contract = eligible_contracts[position - 1].replace(" Comdty","")
+                active_contract = eligible_contracts[position - 1].replace(' COMB', '').replace(' Comdty', '')
                 price = df.at[date, active_contract]
                 generic_curve.at[date, 'price_series_loader'] = price
                 generic_curve.at[date, 'active_contract'] = active_contract

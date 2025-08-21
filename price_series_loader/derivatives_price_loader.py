@@ -63,7 +63,7 @@ class DerivativesPriceLoader(PriceLoader):
 
         # Group by contract_ref_loader and date, take last px_settle for duplicates and unstack tickers as columns
         price_df = df.groupby(['unique_id_fut_opt', 'date'])['px_settle'].last().unstack(level=0)
-        price_df.columns = [col.replace(' Comdty', '') for col in price_df.columns]
+        price_df.columns = [col.replace(' COMB','').replace(' Comdty', '') for col in price_df.columns]
         # Sort columns using your custom monthly contract_ref_loader sort key
         sorted_columns = sorted(price_df.columns,
                                 key=lambda ticker: custom_monthly_contract_sort_key(contract=ticker))

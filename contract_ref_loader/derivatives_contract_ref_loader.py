@@ -86,80 +86,84 @@ class DerivativesContractRefLoader(ContractRefLoader):
     def load_tickers(self, mode, contracts=None, relevant_months=None, relevant_years=None,
                      relevant_options=None, relevant_strikes=None) -> pd.DataFrame:
 
-        if isinstance(relevant_months, str):
-            relevant_months = [relevant_months]
-        elif relevant_months is not None:
-            relevant_months = [str(m) for m in relevant_months]
+        def normalize_list(x):
+            if isinstance(x, (str, int)):
+                return [str(x)]
+            elif x is not None:
+                return [str(i) for i in x]
+            return None
 
-        if isinstance(relevant_years, str) or isinstance(relevant_years, int):
-            relevant_years = [str(relevant_years)]
-        elif relevant_years is not None:
-            relevant_years = [str(y) for y in relevant_years]
-
-        if isinstance(relevant_options, str):
-            relevant_options = [relevant_options]
-        elif relevant_options is not None:
-            relevant_options = [str(o) for o in relevant_options]
-
-        if isinstance(relevant_strikes, str) or isinstance(relevant_strikes, int):
-            relevant_strikes = [str(relevant_strikes)]
-        elif relevant_strikes is not None:
-            relevant_strikes = [str(s) for s in relevant_strikes]
+        relevant_months = normalize_list(relevant_months)
+        relevant_years = normalize_list(relevant_years)
+        relevant_options = normalize_list(relevant_options)
+        relevant_strikes = normalize_list(relevant_strikes)
 
         futures_category = instrument_ref_dict.get(self.instrument_name, {}).get('futures_category')
         if not futures_category:
             print(f"Instrument '{self.instrument_name}' not found in reference dictionary.")
             return pd.DataFrame()
 
-        # Enforce option-only fields
         if mode == 'futures':
-            if relevant_options is not None:
-                raise ValueError("relevant_options should be None when mode is 'futures'")
-            if relevant_strikes is not None:
-                raise ValueError("relevant_strikes should be None when mode is 'futures'")
+            if relevant_options is not None or relevant_strikes is not None:
+                raise ValueError("Options and strikes should be None when mode is 'futures'")
 
-        regex_pattern = self._build_ticker_regex(mode=mode)
+        month_letters = ''.join(month_codes.keys())
+        regex_comb = f"^{self.instrument_name}[{month_letters}][0-9] COMB Comdty$"
+        regex_non_comb = f"^{self.instrument_name}[{month_letters}][0-9] Comdty$"
 
         query = f"""
-            SELECT DISTINCT i.name, tc.type, dc.unique_id_fut_opt, dc.ticker, dc.opt_exer_typ, dc.futures_category, 
-            c.currency, dc.real_underlying_ticker, dc.fut_first_trade_dt, dc.opt_first_trade_dt, dc.last_tradeable_dt, 
-            dc.opt_expire_dt
-            FROM ref.derivatives_contract dc
-            LEFT JOIN ref.currency c
-            ON c.id = dc.currency_id 
-            LEFT JOIN ref.instrument i
-            on i.id = dc.instrument_id
-            LEFT JOIN ref.traded_contract tc
-            on tc.id = dc.traded_contract_id
-            WHERE dc.unique_id_fut_opt ~ '{regex_pattern}'
-            AND dc.futures_category = '{futures_category}'
+            WITH base AS (
+                SELECT dc.*, i.name AS instrument_name, tc.type, c.currency
+                FROM ref.derivatives_contract dc
+                LEFT JOIN ref.currency c ON c.id = dc.currency_id 
+                LEFT JOIN ref.instrument i ON i.id = dc.instrument_id
+                LEFT JOIN ref.traded_contract tc ON tc.id = dc.traded_contract_id
+                WHERE dc.futures_category = '{futures_category}'
+            ),
+            comb AS (
+                SELECT DISTINCT unique_id_fut_opt FROM base
+                WHERE unique_id_fut_opt ~ '{regex_comb}'
+            ),
+            final AS (
+                SELECT * FROM base
+                WHERE unique_id_fut_opt ~ '{regex_comb}'
+                UNION
+                SELECT * FROM base
+                WHERE unique_id_fut_opt ~ '{regex_non_comb}'
+                AND REGEXP_REPLACE(unique_id_fut_opt, ' Comdty$', '') || ' COMB Comdty' NOT IN (
+                    SELECT unique_id_fut_opt FROM comb
+                )
+            )
+            SELECT DISTINCT instrument_name, type, unique_id_fut_opt, ticker, opt_exer_typ, futures_category, 
+                            currency, real_underlying_ticker, fut_first_trade_dt, opt_first_trade_dt, 
+                            last_tradeable_dt, opt_expire_dt
+            FROM final
+            WHERE 1=1
         """
-        # print(query)
+
         if contracts:
             tickers_list = "', '".join(contracts)
-            query += f" AND dc.unique_id_fut_opt IN ('{tickers_list}')"
+            query += f" WHERE unique_id_fut_opt IN ('{tickers_list}')"
 
         if relevant_months:
             month_filter = "', '".join(relevant_months)
-            query += f" AND SUBSTRING(dc.ticker, {len(self.instrument_name) + 1}, 1) IN ('{month_filter}')"
+            query += f" AND SUBSTRING(ticker, {len(self.instrument_name) + 1}, 1) IN ('{month_filter}')"
 
         if relevant_years:
             year_filter = "', '".join(relevant_years)
-            query += f" AND SUBSTRING(dc.ticker, {len(self.instrument_name) + 2}, 1) IN ('{year_filter}')"
+            query += f" AND SUBSTRING(ticker, {len(self.instrument_name) + 2}, 1) IN ('{year_filter}')"
 
         if mode == 'options':
-
             if relevant_options:
                 options_filter = "', '".join(relevant_options)
-                query += (f" AND (LENGTH(dc.ticker) = {len(self.instrument_name) + 3} AND RIGHT(dc.ticker, 1) IN "
-                          f"('{options_filter}'))")
+                query += (f" AND LENGTH(ticker) = {len(self.instrument_name) + 3} "
+                          f"AND RIGHT(ticker, 1) IN ('{options_filter}')")
 
             if relevant_strikes:
-                # Extract the strike portion from ticker: assume format like CTH5C 105 (with space)
-                strike_filter = "', '".join(str(s) for s in relevant_strikes)
-                query += f" AND SPLIT_PART(dc.unique_id_fut_opt , ' ', 2) IN ('{strike_filter}')"
+                strike_filter = "', '".join(relevant_strikes)
+                query += f" AND SPLIT_PART(unique_id_fut_opt, ' ', 2) IN ('{strike_filter}')"
 
-        query += " ORDER BY dc.unique_id_fut_opt"
+        query += " ORDER BY unique_id_fut_opt"
         print(query)
 
         with self.source.connect() as conn:

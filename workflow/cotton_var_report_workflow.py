@@ -49,9 +49,11 @@ def cotton_var_report_workflow(method, cob_date) -> dict:
         print(generic_curves_df.head())
         generic_curves_df = generic_curves_df.replace({pd.NA: np.nan}, inplace=False).astype(float).round(
             3)  # .astype(float).round(3) is limitation of BBG BDH formula -> to remove in future
+        print(active_contracts_df.head())
         instrument_dict[instrument_name] = {'relative_returns_df': relative_returns(generic_curves_df),
-                                            'contract_to_curve_map': {v: k for k, v in active_contracts_df
-                                            .loc[actual_cob_date].to_dict().items()}}
+                                            'contract_to_curve_map': {v.replace(' COMB', ''): k for k, v in
+                                                                      active_contracts_df.loc[actual_cob_date].
+                                                                      to_dict().items() if v is not None}}
     # Step 2: Generate basis return series
     #basis_abs_ret_df = fy24_cotton_basis_workflow(write_to_excel=False, apply_smoothing=False)
     #print(basis_abs_ret_df.head())
@@ -75,6 +77,7 @@ def cotton_var_report_workflow(method, cob_date) -> dict:
     deriv_pos_df = derivatives.load_position(date=cob_date, trader_id='all', counterparty_id='all', product=product,
                                              books=None)
     deriv_pos_df = derivatives.assign_bbg_tickers(deriv_pos_df)
+    deriv_pos_df = deriv_pos_df[deriv_pos_df['total_active_lots'] != 0]
     deriv_pos_df = derivatives.assign_generic_curves(deriv_pos_df, instrument_dict)
     print(deriv_pos_df.head())
 
@@ -86,6 +89,7 @@ def cotton_var_report_workflow(method, cob_date) -> dict:
 
     # Step 4D: Combine all positions into one position table
     combined_pos_df = pd.concat([deriv_pos_df, phys_pos_df], axis=1)
+    price_pos_df = deriv_pos_df[deriv_pos_df['books'] == 'PRICE']
 
     # Step 5: Depending on method, calculate (linear/non-linear) PnL vectors using prices and positions
     for pos in combined_pos_df.index:

@@ -240,9 +240,13 @@ class DerivativesPositionLoader(PositionLoader):
     @staticmethod
     def map_generic_curve(row, instrument_dict):
         instrument = row['product_code'].replace('CM ', '')  # e.g., 'CM CT' → 'CT'
+        if len(instrument) == 1:
+            instrument = instrument + ' '
         contract = row['underlying_bbg_ticker'].replace(' Comdty', '')
         if instrument in instrument_dict:
+            print(2, instrument, contract)
             curve_map = instrument_dict[instrument].get('contract_to_curve_map', {})
+            print(curve_map)
             return curve_map.get(contract)
         return None
 

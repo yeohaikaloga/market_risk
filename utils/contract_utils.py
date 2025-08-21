@@ -3,7 +3,7 @@ month_codes = {'F': 1, 'G': 2, 'H': 3, 'J': 4, 'K': 5, 'M': 6, 'N': 7, 'Q': 8, '
 
 
 def custom_monthly_contract_sort_key(contract):
-    contract_part = contract.replace(' Comdty', '')
+    contract_part = contract.replace(' COMB', '').replace(' Comdty', '')
     if len(contract_part) < 3:
         return (contract_part, 0, 0)
     # Extract month and year chars
