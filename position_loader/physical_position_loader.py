@@ -11,7 +11,7 @@ class PhysicalPositionLoader(PositionLoader):
 
     def load_position(self, date, opera_product, trader_id=None, counterparty_id=None) -> pd.DataFrame:
         base_query = '''
-                SELECT pos.tdate, sp.subportfolio, pf.portfolio, sec.security_id, sec.strike, sec.derivative_type,
+                SELECT pos.cob_date, sp.subportfolio, pf.portfolio, sec.security_id, sec.strike, sec.derivative_type,
                        tr.id AS trader_id, tr.name AS trader_name,
                        cp.id AS counterparty_id, cp.counterparty_parent,
                        SUM(pos.total_active_lots) AS total_active_lots
@@ -22,7 +22,7 @@ class PhysicalPositionLoader(PositionLoader):
                 JOIN position_opera.trader tr ON pos.trader_id = tr.id
                 JOIN position_opera.security sec ON pos.risk_security_id = sec.id
                 WHERE pos.opera_product = :opera_product
-                  AND pos.tdate = :date
+                  AND pos.cob_date = :date
                   AND sp.subportfolio != 'CONSO-CT'
             '''
 
@@ -43,9 +43,9 @@ class PhysicalPositionLoader(PositionLoader):
 
         # Add GROUP BY clause
         base_query += '''
-                GROUP BY pos.tdate, sp.subportfolio, pf.portfolio, sec.security_id, sec.strike, sec.derivative_type,
+                GROUP BY pos.cob_date, sp.subportfolio, pf.portfolio, sec.security_id, sec.strike, sec.derivative_type,
                          tr.id, tr.name, cp.id, cp.counterparty_parent
-            '''`
+            '''
 
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(base_query), conn, params=params)

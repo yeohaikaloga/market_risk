@@ -9,23 +9,26 @@ instrument_ref_dict = {'CT': {'futures_category': 'Fibers', 'to_USD_conversion':
                        'VV': {'futures_category': 'Fibers', 'to_USD_conversion': 1, 'currency': 'CNY', 'units': 'MT',
                               'lots_to_MT_conversion': 5},
                        'CCL': {'futures_category': 'Fibers', 'to_USD_conversion': 1000/355.56, 'currency': 'INR',
-                               'units': 'candy', 'MT_conversion': 22.679851220176},
+                               'units': 'candy', 'lots_to_MT_conversion': 22.679851220176},
                        'OR': {'futures_category': 'Industrial Material'},
                        'JN': {'futures_category': 'Industrial Material'},
                        'SRB': {'futures_category': 'Industrial Material'},
                        'RT': {'futures_category': 'Industrial Material'},
                        'BDR': {'futures_category': 'Industrial Material'},
                        'RG': {'futures_category': 'Industrial Material'},
-                       'C ': {'futures_category': 'Corn', 'to_USD_conversion': 39.36821/100, 'currency': 'USc'},
-                       'EP': {'futures_category': 'Corn'},
+                       'C ': {'futures_category': 'Corn', 'to_USD_conversion': 39.36821/100, 'currency': 'USc',
+                              'lots_to_MT_conversion': 1},
+                       'EP': {'futures_category': 'Corn', },
                        'CRD': {'futures_category': 'Corn'},
                        'AC': {'futures_category': 'Corn'},
                        'CA': {'futures_category': 'Wheat'},
-                       'W ': {'futures_category': 'Wheat', 'to_USD_conversion': 36.74371/100, 'currency': 'USc'},
-                       'KW': {'futures_category': 'Wheat'},
+                       'W ': {'futures_category': 'Wheat', 'to_USD_conversion': 36.74371/100, 'currency': 'USc',
+                              'lots_to_MT_conversion': 1},
+                       'KW': {'futures_category': 'Wheat', },
                        'MW': {'futures_category': 'Wheat'},
                        'KFP': {'futures_category': 'Wheat'},
-                       'S ': {'futures_category': 'Soy', 'to_USD_conversion': 36.74371/100, 'currency': 'USc'},
+                       'S ': {'futures_category': 'Soy', 'to_USD_conversion': 36.74371/100, 'currency': 'USc',
+                              'lots_to_MT_conversion': 1},
                        'SM': {'futures_category': 'Soy'},
                        'BO': {'futures_category': 'Soy'},
                        'AE': {'futures_category': 'Soy'},
@@ -38,7 +41,7 @@ instrument_ref_dict = {'CT': {'futures_category': 'Fibers', 'to_USD_conversion':
                        'THE': {'futures_category': 'Refined Products'},
                        'HO': {'futures_category': 'Refined Products'},
                         'SB': {'futures_category': 'Foodstuff', 'to_USD_conversion': 2204.6/100, 'currency': 'USc',
-                               'units': 'lbs'},
+                               'units': 'lbs', 'lots_to_MT_conversion': 22.679851220176},
                        'QW': {'futures_category': 'Foodstuff'},
                        'DF': {'futures_category': 'Foodstuff'},
                        'CC': {'futures_category': 'Foodstuff'},
@@ -85,7 +88,7 @@ class DerivativesContractRefLoader(ContractRefLoader):
 
     def load_tickers(self, mode, contracts=None, relevant_months=None, relevant_years=None,
                      relevant_options=None, relevant_strikes=None) -> pd.DataFrame:
-
+    #TODO Rewrite query to use company id.
         def normalize_list(x):
             if isinstance(x, (str, int)):
                 return [str(x)]
@@ -164,7 +167,7 @@ class DerivativesContractRefLoader(ContractRefLoader):
                 query += f" AND SPLIT_PART(unique_id_fut_opt, ' ', 2) IN ('{strike_filter}')"
 
         query += " ORDER BY unique_id_fut_opt"
-        print(query)
+        #print(query)
 
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn)

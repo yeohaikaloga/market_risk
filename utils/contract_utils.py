@@ -20,3 +20,9 @@ def custom_monthly_contract_sort_key(contract):
     month = month_codes.get(month_char, 0)
 
     return (instrument_name, year, month)
+
+def extract_instrument_name(product_code):
+    name = product_code.replace('CM ', '')
+    if len(name) == 1:
+        name = name + ' '
+    return name

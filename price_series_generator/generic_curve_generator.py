@@ -9,6 +9,18 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         super().__init__(df)
         self.df = df
         self.futures_contract = futures_contract
+        self._contract_expiry_dates = None
+        self._contract_roll_dates = None
+
+    def _prepare_curve_inputs(self, roll_days: int):
+        """
+        Preload expiry and roll dates just once per instrument.
+        """
+        if self._contract_expiry_dates is None or self._contract_roll_dates is None:
+            expiry = self.futures_contract.load_underlying_futures_expiry_dates(mode='futures')
+            roll = {k: v - pd.Timedelta(days=roll_days) for k, v in expiry.items()}
+            self._contract_expiry_dates = expiry
+            self._contract_roll_dates = roll
 
     def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = 'none') -> pd.DataFrame:
         """
@@ -28,13 +40,12 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             'price_series_loader'.
             - 'adjustment_values': The cumulative adjustment factor or difference applied on each date.
         """
-
-
         valid_adjustments = {'none', 'ratio', 'difference'}
         if adjustment not in valid_adjustments:
             raise ValueError(f"Invalid adjustment method: {adjustment}. Must be one of {valid_adjustments}")
 
-        df = self.df.sort_index(ascending=True)
+        self._prepare_curve_inputs(roll_days)
+        df = self.df
         contracts = df.columns.tolist()
         print('columns:', contracts)
         index = df.index
@@ -43,22 +54,22 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                                               'adjustment_values'])
 
         # Load expiry and roll dates
-        contract_expiry_dates = self.futures_contract.load_underlying_futures_expiry_dates(mode='futures')
-        contract_roll_dates = {k: v - pd.Timedelta(days=roll_days) for k, v in contract_expiry_dates.items()}
-        print('expiry:', contract_expiry_dates)
-        print('roll:', contract_roll_dates)
+        expiry_dates = self._contract_expiry_dates
+        roll_dates = self._contract_roll_dates
+        print('expiry:', expiry_dates)
+        print('roll:', roll_dates)
 
         # STEP 1: Build unadjusted generic curve
         for date in index:
             eligible_contracts = []
             for contract in contracts:
                 full_contract_name = contract + ' Comdty'
-                if full_contract_name not in contract_roll_dates.keys():
+                if full_contract_name not in roll_dates.keys():
                     full_contract_name = contract + ' COMB Comdty'
                 price = df.at[date, contract]
                 if pd.notna(price):
-                    roll_date = contract_roll_dates[full_contract_name]
-                    expiry_date = contract_expiry_dates[full_contract_name]
+                    roll_date = roll_dates[full_contract_name]
+                    expiry_date = expiry_dates[full_contract_name]
                     if roll_date is None or expiry_date is None:
                         continue  # skip if info missing
 
@@ -163,3 +174,5 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             active_contracts_df[col_name] = curve['active_contract']
 
         return combined_df, active_contracts_df
+
+# TODO Validate the generic curves against BBG generated curves

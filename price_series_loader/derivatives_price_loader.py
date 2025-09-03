@@ -49,7 +49,7 @@ class DerivativesPriceLoader(PriceLoader):
 
         if instrument_name == 'CT':
             query += " AND dc.feed_source = 'eNYB'"
-        print(query)
+        #print(query)
 
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn)
