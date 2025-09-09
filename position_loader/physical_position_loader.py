@@ -1,6 +1,10 @@
-from position.position_loader import PositionLoader
+from position_loader.position_loader import PositionLoader
 import pandas as pd
 from sqlalchemy import text
+from utils.contract_utils import get_month_code
+from utils.contract_utils import custom_monthly_contract_sort_key
+from datetime import datetime
+
 
 class PhysicalPositionLoader(PositionLoader):
 
@@ -10,6 +14,7 @@ class PhysicalPositionLoader(PositionLoader):
         self.date = date
 
     def load_position(self, date, opera_product, trader_id=None, counterparty_id=None) -> pd.DataFrame:
+        # TODO load physical position from master physical position table; still WIP.
         base_query = '''
                 SELECT pos.cob_date, sp.subportfolio, pf.portfolio, sec.security_id, sec.strike, sec.derivative_type,
                        tr.id AS trader_id, tr.name AS trader_name,
@@ -52,3 +57,109 @@ class PhysicalPositionLoader(PositionLoader):
 
         return df
 
+    def _load_filtered_cotton_positions(self, cob_date: str) -> pd.DataFrame:
+        query = 'SELECT * FROM staging.cotton_physical_positions'
+        with self.source.connect() as conn:
+            df = pd.read_sql_query(text(query), conn)
+
+        # Apply consistent filters
+        df = df[df['cob'] == cob_date]
+        df = df[df['quantity'] != 0]
+        df = df[df['UNIT'] != 'TOTAL']
+        return df
+
+    def load_cotton_phy_position_from_staging(self, cob_date: str) -> pd.DataFrame:
+        df = self._load_filtered_cotton_positions(cob_date)
+        return df
+
+    def load_cotton_unit_region_mapping_from_staging(self, cob_date: str) -> dict:
+        df = self._load_filtered_cotton_positions(cob_date)
+        return dict(zip(df['UNIT'], df['REGION']))
+
+    @staticmethod
+    def map_bbg_tickers(instrument_name: str, terminal_month: datetime) -> tuple[str | None, str | None]:
+        """
+        Returns both Bloomberg-style option ticker and underlying ticker.
+        Returns: (option_ticker, underlying_ticker)
+        """
+        try:
+            if not isinstance(instrument_name, str) or not isinstance(terminal_month, datetime):
+                return None, None
+
+            month = terminal_month.month
+            year = str(terminal_month.year)[-1]  # last digit of year as string
+            month_code = get_month_code(month)
+            if month_code is None:
+                return None, None
+
+            bbg_ticker = instrument_name + month_code + year + ' Comdty'
+            return bbg_ticker, bbg_ticker
+
+        except Exception:
+            return None, None
+
+    def assign_bbg_tickers(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.copy()
+        df[['bbg_ticker', 'underlying_bbg_ticker']] = df.apply(
+            lambda row: pd.Series(self.map_bbg_tickers(row['instrument_name'], row['terminal_month'])), axis=1)
+
+        for col in ['bbg_ticker', 'underlying_bbg_ticker']:
+            invalid = df[df[col].isna()]
+            if not invalid.empty:
+                print(f"Warning: Found {len(invalid)} invalid instrument_name or terminal_month for column '{col}':")
+                print(invalid[['instrument_name', 'terminal_month']])
+            else:
+                print(f"All instrument_name and terminal_month successfully mapped to '{col}'.")
+        return df
+
+    @staticmethod
+    def map_generic_curve_with_fallback(contract, contract_to_curve_map):
+        if contract in contract_to_curve_map:
+            return contract_to_curve_map[contract]
+
+        sorted_contracts = sorted(contract_to_curve_map.keys(), key=custom_monthly_contract_sort_key)
+
+        for c in sorted_contracts:
+            if custom_monthly_contract_sort_key(c) > custom_monthly_contract_sort_key(contract):
+                return contract_to_curve_map[c]
+
+        # No later contract found — use the last available
+        last_contract = sorted_contracts[-1]
+        return contract_to_curve_map[last_contract]
+
+    @staticmethod
+    def map_generic_curve(row, instrument_dict):
+        underlying = str(row.get('underlying_bbg_ticker', ''))
+        contract = underlying.replace(' Comdty', '').upper()
+
+        instrument_name = str(row.get('instrument_name', '')).upper()
+        instrument_info = instrument_dict.get(instrument_name)
+        if not instrument_info:
+            print(f"[WARN] Instrument '{instrument_name}' not found in instrument_dict.")
+            return None
+
+        curve_map = instrument_info.get('contract_to_curve_map', {})
+
+        if contract in curve_map:
+            return curve_map[contract]
+
+        # Fallback: next available or last
+        fallback = PhysicalPositionLoader.map_generic_curve_with_fallback(contract, curve_map)
+        if fallback:
+            print(f"[Fallback] {contract} mapped to {fallback} under instrument {instrument_name} for {row}")
+            return fallback
+
+        print(f"[WARN] No mapping or fallback found for contract {contract} under instrument {instrument_name}")
+        return None
+
+    def assign_generic_curves(self, df: pd.DataFrame, instrument_dict: dict) -> pd.DataFrame:
+        df = df.copy()
+        df['generic_curve'] = df.apply(lambda row: self.map_generic_curve(row, instrument_dict), axis=1)
+
+        invalid = df[df['generic_curve'].isna()]
+        if not invalid.empty:
+            print(f"Warning: {len(invalid)} positions could not be mapped to a generic curve.")
+            print(invalid[['region', 'subportfolio', 'underlying_bbg_ticker']])
+        else:
+            print("All positions successfully mapped to a generic curve.")
+        return df

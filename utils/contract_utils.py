@@ -21,6 +21,16 @@ def custom_monthly_contract_sort_key(contract):
 
     return (instrument_name, year, month)
 
+def get_month_code(month: int) -> str | None:
+    """
+    Given a month number, return the corresponding month code key.
+    If no match found, return None.
+    """
+    for code, num in month_codes.items():
+        if num == month:
+            return code
+    return None
+
 def extract_instrument_name(product_code):
     name = product_code.replace('CM ', '')
     if len(name) == 1:

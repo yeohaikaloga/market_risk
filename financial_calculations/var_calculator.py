@@ -2,6 +2,7 @@ import pandas as pd
 from pandas import Series
 from utils.date_utils import get_prev_biz_days_list
 
+
 class VaRCalculator:
 
     @staticmethod

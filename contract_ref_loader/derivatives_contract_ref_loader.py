@@ -121,12 +121,10 @@ class DerivativesContractRefLoader(ContractRefLoader):
                 LEFT JOIN ref.currency c ON c.id = dc.currency_id 
                 LEFT JOIN ref.instrument i ON i.id = dc.instrument_id
                 LEFT JOIN ref.traded_contract tc ON tc.id = dc.traded_contract_id
-                WHERE dc.futures_category = '{futures_category}'
-            ),
+                WHERE dc.futures_category = '{futures_category}'),
             comb AS (
                 SELECT DISTINCT unique_id_fut_opt FROM base
-                WHERE unique_id_fut_opt ~ '{regex_comb}'
-            ),
+                WHERE unique_id_fut_opt ~ '{regex_comb}'),
             final AS (
                 SELECT * FROM base
                 WHERE unique_id_fut_opt ~ '{regex_comb}'
@@ -134,37 +132,41 @@ class DerivativesContractRefLoader(ContractRefLoader):
                 SELECT * FROM base
                 WHERE unique_id_fut_opt ~ '{regex_non_comb}'
                 AND REGEXP_REPLACE(unique_id_fut_opt, ' Comdty$', '') || ' COMB Comdty' NOT IN (
-                    SELECT unique_id_fut_opt FROM comb
-                )
-            )
+                    SELECT unique_id_fut_opt FROM comb))
             SELECT DISTINCT instrument_name, type, unique_id_fut_opt, ticker, opt_exer_typ, futures_category, 
                             currency, real_underlying_ticker, fut_first_trade_dt, opt_first_trade_dt, 
                             last_tradeable_dt, opt_expire_dt
             FROM final
-            WHERE 1=1
         """
+
+        # Conditional filters
+        conditions = []
 
         if contracts:
             tickers_list = "', '".join(contracts)
-            query += f" WHERE unique_id_fut_opt IN ('{tickers_list}')"
+            conditions.append(f"unique_id_fut_opt IN ('{tickers_list}')")
 
         if relevant_months:
             month_filter = "', '".join(relevant_months)
-            query += f" AND SUBSTRING(ticker, {len(self.instrument_name) + 1}, 1) IN ('{month_filter}')"
+            conditions.append(f"SUBSTRING(ticker, {len(self.instrument_name) + 1}, 1) IN ('{month_filter}')")
 
         if relevant_years:
             year_filter = "', '".join(relevant_years)
-            query += f" AND SUBSTRING(ticker, {len(self.instrument_name) + 2}, 1) IN ('{year_filter}')"
+            conditions.append(f"SUBSTRING(ticker, {len(self.instrument_name) + 2}, 1) IN ('{year_filter}')")
 
         if mode == 'options':
             if relevant_options:
                 options_filter = "', '".join(relevant_options)
-                query += (f" AND LENGTH(ticker) = {len(self.instrument_name) + 3} "
-                          f"AND RIGHT(ticker, 1) IN ('{options_filter}')")
+                conditions.append(f"LENGTH(ticker) = {len(self.instrument_name) + 3}")
+                conditions.append(f"RIGHT(ticker, 1) IN ('{options_filter}')")
 
             if relevant_strikes:
                 strike_filter = "', '".join(relevant_strikes)
-                query += f" AND SPLIT_PART(unique_id_fut_opt, ' ', 2) IN ('{strike_filter}')"
+                conditions.append(f"SPLIT_PART(unique_id_fut_opt, ' ', 2) IN ('{strike_filter}')")
+
+        # Append all conditions
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
 
         query += " ORDER BY unique_id_fut_opt"
         #print(query)

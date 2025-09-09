@@ -24,11 +24,20 @@ class PnLAnalyzer:
 
     def pivot(self, index='unit', columns='pnl_date', values='lookback_pnl'):
         df = self._pos_and_pnl_df
-        missing_keys = [key for key in [index, columns, values] if key not in df.columns]
+
+        # Flatten index, columns, and values to lists for uniform checking
+        index_cols = index if isinstance(index, (list, tuple)) else [index]
+        column_cols = columns if isinstance(columns, (list, tuple)) else [columns]
+        value_cols = [values]  # always a single column
+
+        # Check for missing columns
+        all_required_cols = index_cols + column_cols + value_cols
+        missing_keys = [key for key in all_required_cols if key not in df.columns]
         if missing_keys:
             print("Available columns:", df.columns.tolist())
             raise KeyError(f"Missing pivot key(s): {missing_keys}")
 
+        # Perform pivot
         return df.pivot_table(index=index, columns=columns, values=values, aggfunc='sum')
 
     def to_excel(self, path):

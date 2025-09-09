@@ -15,7 +15,7 @@ class DerivativesPositionLoader(PositionLoader):
     def load_position(self, date, product, trader_id=None, counterparty_id=None, region=None,
                       books=None) -> pd.DataFrame:
         product_map = {'cotton': ['cto'], 'rms-cfs only': ['cfs'], 'rms': ['cfs', 'rmc'], 'rubber': ['rba', 'rbc']}
-            # Add more products as needed
+        # Add more products as needed
 
         if product not in product_map:
             raise ValueError(f"Unsupported product: {product}")
@@ -40,7 +40,8 @@ class DerivativesPositionLoader(PositionLoader):
 
         where_conditions = [f"pos.opera_product IN {opera_products_sql}", f"pos.cob_date = {date_sql}",
                             "sp.subportfolio != 'CONSO-CT'",
-                            "CAST(pos.tdate AS DATE) BETWEEN CAST(pos.cob_date AS DATE) AND CAST(pos.cob_date AS DATE) + INTERVAL '1 day'"]  # <-- tdate-cob_date filter as Fri/Sat/Sun tdate maps to Fri cob_date
+                            "CAST(pos.tdate AS DATE) BETWEEN CAST(pos.cob_date AS DATE) AND CAST(pos.cob_date AS DATE) "
+                            "+ INTERVAL '1 day'"]  # <-- tdate-cob_date filter as Fri/Sat/Sun tdate maps to Fri cob_date
 
         # Cotton-specific joins and filters
         if product == 'cotton':
@@ -182,11 +183,11 @@ class DerivativesPositionLoader(PositionLoader):
         Returns: (option_ticker, underlying_ticker)
         """
         if not isinstance(security_id, str):
-            return (None, None)
+            return None, None
 
         security_id = security_id.strip()
         if not security_id.startswith("CM "):
-            return (None, None)
+            return None, None
 
         core = security_id[3:].strip()
 
@@ -196,7 +197,7 @@ class DerivativesPositionLoader(PositionLoader):
                 pattern = r'^(\w+)\s+([A-Z])(\d{2})\.([A-Z])(\d{2})([CP])\s+(\d+)$'
                 m = re.match(pattern, core)
                 if not m:
-                    return (None, None)
+                    return None, None
 
                 asset_raw, opt_month, opt_year, und_month, und_year, opt_type, strike = m.groups()
                 asset = asset_raw + ' ' if len(asset_raw) == 1 else asset_raw
@@ -204,28 +205,28 @@ class DerivativesPositionLoader(PositionLoader):
                 option_ticker = f"{asset}{opt_month}{opt_year[1]}{opt_type} {strike} Comdty"
                 underlying_ticker = f"{asset}{und_month}{und_year[1]} Comdty"
 
-                return (option_ticker, underlying_ticker)
+                return option_ticker, underlying_ticker
 
             # Handle futures
             else:
                 parts = re.split(r'\s+', core)
                 if len(parts) != 2:
-                    return (None, None)
+                    return None, None
 
                 asset_raw, expiry = parts
                 asset = asset_raw + ' ' if len(asset_raw) == 1 else asset_raw
 
                 m = re.match(r'^([A-Z])(\d{2})$', expiry)
                 if not m:
-                    return (None, None)
+                    return None, None
 
                 month_code, year_code = m.groups()
                 fut_ticker = f"{asset}{month_code}{year_code[1]} Comdty"
 
                 # For futures, both option and underlying ticker are the same
-                return (fut_ticker, fut_ticker)
+                return fut_ticker, fut_ticker
         except Exception:
-            return (None, None)
+            return None, None
 
     def assign_bbg_tickers(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
@@ -235,7 +236,7 @@ class DerivativesPositionLoader(PositionLoader):
         for col in ['bbg_ticker', 'underlying_bbg_ticker']:
             invalid = df[df[col].isna()]
             if not invalid.empty:
-                print(f"Warning: Found {len(invalid)} invalid or unconvertible security_ids for column '{col}':")
+                print(f"Warning: Found {len(invalid)} invalid security_ids for column '{col}':")
                 print(invalid[['security_id']])
             else:
                 print(f"All security_ids successfully mapped to '{col}'.")
@@ -262,10 +263,10 @@ class DerivativesPositionLoader(PositionLoader):
             print(invalid[['security_id', 'product_code', 'underlying_bbg_ticker']])
         else:
             print("All positions successfully mapped to a generic curve.")
-
         return df
 
-    def map_conversion_to_MT(self, row):
+    @staticmethod
+    def map_conversion_to_mt(row):
         """
         Extract instrument prefix and return total_active_lots * conversion factor.
         """
@@ -290,9 +291,9 @@ class DerivativesPositionLoader(PositionLoader):
         # No match or no conversion found
         return 0
 
-    def assign_total_active_MT(self, df: pd.DataFrame) -> pd.DataFrame:
+    def assign_total_active_mt(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        df['total_active_MT'] = df.apply(self.map_conversion_to_MT, axis=1)
+        df['total_active_MT'] = df.apply(self.map_conversion_to_mt, axis=1)
 
         invalid_conversions = df[df['total_active_MT'] == 0]
         if not invalid_conversions.empty:
@@ -305,29 +306,23 @@ class DerivativesPositionLoader(PositionLoader):
 
         return df
 
-    def load_sensitivities(self, position_df: pd.DataFrame, sensitivity_type: str = 'delta') -> pd.DataFrame:
+    def load_opera_sensitivities(self, position_df: pd.DataFrame, sensitivity_type: str) -> pd.DataFrame:
         """
-        Load sensitivities for securities in the given position DataFrame and merge them.
-
-        Sensitivities are only loaded if position_df is not empty.
-
-        Args:
-            position_df (pd.DataFrame): DataFrame containing positions with 'cob_date' and 'security_id' columns.
-            sensitivity_type (str): Type of sensitivity to load (e.g., 'delta', 'gamma', etc.)
+        Fetch and deduplicate OPERA sensitivities from the DB for the given positions.
 
         Returns:
-            pd.DataFrame: Merged DataFrame including sensitivity values.
+            pd.DataFrame: sensitivity_df with ['security_id', 'cob_date', sensitivity_type]
         """
         if position_df.empty:
             print("No positions available; skipping sensitivity load.")
-            return position_df
+            return pd.DataFrame()
 
         supported_types = ['settle_delta_1', 'settle_delta_2', 'settle_gamma_11', 'settle_gamma_12', 'settle_gamma_21',
                            'settle_gamma2', 'settle_vega_1', 'settle_vega_2', 'settle_theta', 'settle_chi']
         if sensitivity_type not in supported_types:
             raise ValueError(f"Unsupported sensitivity_type '{sensitivity_type}'. Must be one of {supported_types}.")
 
-        # Extract the cob_date(s) and security_id(s) present in the position_df to filter sens query
+        # Prepare query values
         position_df['cob_date'] = pd.to_datetime(position_df['cob_date'], errors='coerce')
         cob_dates = position_df['cob_date'].dt.strftime('%Y-%m-%d').unique()
         security_ids = position_df['security_id'].unique()
@@ -335,51 +330,70 @@ class DerivativesPositionLoader(PositionLoader):
         cob_dates_sql = ", ".join(f"'{d}'" for d in cob_dates)
         security_ids_sql = ", ".join(f"'{sid}'" for sid in security_ids)
 
-        #TODO Watch out for change in definition of cob_date and check whether it continues to match with 1201 or RMS reports
         sens_query = f"""
-            SELECT security_id, cob_date, {sensitivity_type}
-            FROM staging.opera_security_settlement
-            WHERE cob_date IN ({cob_dates_sql})
-              AND security_id IN ({security_ids_sql})
-              AND {sensitivity_type} IS NOT NULL
+        SELECT security_id, cob_date, {sensitivity_type}
+        FROM staging.opera_security_settlement
+        WHERE cob_date IN ({cob_dates_sql})
+        AND security_id IN ({security_ids_sql})
+        AND {sensitivity_type} IS NOT NULL
         """
         print(sens_query)
 
         with self.source.connect() as conn:
-            raw_sens_df = pd.read_sql_query(text(sens_query), conn)
-            raw_sens_df['cob_date'] = pd.to_datetime(raw_sens_df['cob_date'], errors='coerce')
+            raw_df = pd.read_sql_query(text(sens_query), conn)
+            raw_df['cob_date'] = pd.to_datetime(raw_df['cob_date'], errors='coerce')
 
-        if raw_sens_df.empty:
-            print(f"No sensitivity data ({sensitivity_type}) found for the positions.")
-            position_df[f'{sensitivity_type}'] = None
-            return position_df
+        if raw_df.empty:
+            return pd.DataFrame()
 
-        # Deduplicate before merging (keep first value for each security_id + cob_date)
-        sensitivity_df = raw_sens_df.groupby(['security_id', 'cob_date'], as_index=False)[sensitivity_type].first()
+        # Deduplicate
+        deduplicated_df = raw_df.groupby(['security_id', 'cob_date'], as_index=False)[sensitivity_type].first()
 
-        raw_sens_df['key'] = raw_sens_df[['security_id', 'cob_date']].apply(tuple, axis=1)
-        sensitivity_df['key'] = sensitivity_df[['security_id', 'cob_date']].apply(tuple, axis=1)
-
-        removed_rows = raw_sens_df[~raw_sens_df['key'].isin(sensitivity_df['key'])]
-        retained_rows = raw_sens_df[raw_sens_df['key'].isin(sensitivity_df['key'])]
+        # Debug: show what was removed
+        raw_df['key'] = raw_df[['security_id', 'cob_date']].apply(tuple, axis=1)
+        deduplicated_df['key'] = deduplicated_df[['security_id', 'cob_date']].apply(tuple, axis=1)
+        removed_rows = raw_df[~raw_df['key'].isin(deduplicated_df['key'])]
+        retained_rows = raw_df[raw_df['key'].isin(deduplicated_df['key'])]
 
         if not removed_rows.empty:
-            print(f"\n❌ {len(removed_rows)} duplicate row(s) removed:")
+            print(f"Removed {len(removed_rows)} duplicate rows:")
             print(removed_rows[[sensitivity_type, 'security_id', 'cob_date']])
+            print(f"Retained {len(retained_rows)} rows.")
 
-            print(f"\n✅ {len(retained_rows)} row(s) retained:")
-            print(retained_rows[[sensitivity_type, 'security_id', 'cob_date']])
+        return deduplicated_df.drop(columns='key', errors='ignore')
 
-        # Clean up temp key column
-        sensitivity_df.drop(columns='key', inplace=True)
+    @staticmethod
+    def assign_opera_sensitivities(position_df: pd.DataFrame, sensitivity_df: pd.DataFrame,
+                                   sensitivity_type: str) -> pd.DataFrame:
+        """
+        Merge deduplicated sensitivities onto the position DataFrame with validation.
+
+        Returns:
+            pd.DataFrame: positions with sensitivity column added
+        """
+        original_count = len(position_df)
+
+        if sensitivity_df.empty:
+            print(f"No sensitivity data ({sensitivity_type}) found for the positions.")
+            position_df[sensitivity_type] = None
+            return position_df
 
         merged_df = position_df.merge(sensitivity_df, on=['security_id', 'cob_date'], how='left')
-        missing_df = merged_df[f'{sensitivity_type}'].isnull()
-        if missing_df.any():
-            missing_rows = merged_df.loc[missing_df, ['security_id', 'cob_date', 'portfolio', 'books', 'trader_id']]
-            missing_count = len(missing_rows)
-            print(f"\n{missing_count} position(s) are missing '{sensitivity_type}':\n")
-            print(missing_rows)
+
+        # Validate row count after merge
+        if len(merged_df) > original_count:
+            dupes = merged_df.duplicated(subset=['security_id', 'cob_date'], keep=False)
+            print("Merge increased row count — possible Cartesian product!")
+            print(merged_df[dupes][['security_id', 'cob_date', sensitivity_type]])
+            raise ValueError("Merge caused row duplication. Check for 1:N merge.")
+
+        # Check for missing sensitivities
+        missing = merged_df[merged_df[sensitivity_type].isna()]
+        if not missing.empty:
+            print(f"{len(missing)} positions missing {sensitivity_type}:")
+
+            print(missing[['security_id', 'cob_date', 'portfolio', 'trader_id']])
         else:
-            print("All positions successfully mapped to a f'{sensitivity_type}'.")
+            print(f"All positions successfully mapped to '{sensitivity_type}'.")
+
         return merged_df

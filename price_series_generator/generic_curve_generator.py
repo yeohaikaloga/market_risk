@@ -27,14 +27,16 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         Generate the N-th generic futures curve with optional early rolling and backward adjustment.
 
         Parameters:
-            self (pd.DataFrame): DataFrame with datetime index and futures contract_ref_loader columns (e.g., CTH4, CTK4).
+            self (pd.DataFrame): DataFrame with datetime index and futures contract_ref_loader columns (e.g., CTH4,
+            CTK4).
             position (int): Generic position_loader to compute (1 = front, 2 = second, etc.).
             roll_days (int): Number of business days before a contract_ref_loader's last availability to roll.
             adjustment (str): 'none', 'ratio', or 'difference'.
 
         Returns:
         pd.DataFrame: DataFrame indexed by date with columns:
-            - 'price_series_loader': The unadjusted price_series_loader from the selected contract_ref_loader on each date.
+            - 'price_series_loader': The unadjusted price_series_loader from the selected contract_ref_loader on each
+            date.
             - 'active_contract': The contract_ref_loader symbol selected on each date.
             - 'final_price': The adjusted price_series_loader series if adjustment is applied; otherwise same as
             'price_series_loader'.
@@ -93,7 +95,6 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             adjustment_values = {}
             adjusted_prices = {}
             prev_contract = None
-            prev_date = None
 
             for date in reversed(index):
                 contract = generic_curve.at[date, 'active_contract']
@@ -103,7 +104,6 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                     adjusted_prices[date] = pd.NA
                     adjustment_values[date] = pd.NA
                     prev_contract = None
-                    prev_date = None
                     continue
 
                 # When contract_ref_loader changes (i.e., rolling happened)
@@ -133,7 +133,6 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                 adjusted_prices[date] = adjusted_price
                 adjustment_values[date] = adjustment_value
                 prev_contract = contract
-                prev_date = date
 
             # Add adjusted prices to generic_curve DataFrame
             generic_curve['final_price'] = pd.Series(adjusted_prices)
@@ -144,6 +143,8 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             generic_curve['final_price'] = generic_curve['price_series_loader']
             generic_curve['adjustment_values'] = pd.NA
 
+        # Fill any remaining NaNs forward
+        generic_curve = generic_curve.ffill()
         return generic_curve
 
     def generate_generic_curves_df_up_to(self, max_position: int, roll_days: int = 14,
