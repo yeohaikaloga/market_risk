@@ -1,20 +1,20 @@
-from workflow.var_generator_workflow import generate_var_workflow
-from workflow.var_generator_workflow_v2 import generate_product_var_workflow
-from workflow.options_repricer_workflow import options_workflow
-from workflow.var_report_builder_workflow import build_var_report
 import pandas as pd
-from datetime import datetime
 
+from workflow.var.main_var_workflow import main_var_workflow
 
 if __name__ == '__main__':
 
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
+
     cob_date = '2025-08-22'
     # Note: Greeks in DB only start from 20 Aug 2025
     product = 'cotton'
     method = 'linear'
     window = 260
+
+    main_var_workflow(cob_date=cob_date, product=product, method=method, window=window, with_price_var=True, write_to_excel=True)
+
     # options_workflow()
     #generate_cotton_var_dict = generate_var_workflow(product=product, method=method, cob_date=cob_date, window=window)
     #cotton_pos_df = generate_cotton_var_dict['delta']
@@ -37,4 +37,6 @@ if __name__ == '__main__':
     #generate_rms_var_dict = generate_var_workflow(product=product, method=method, cob_date=cob_date, window=window)
     # TODO: Validate cotton linear var reports
 
-    generate_product_var_workflow(product, method, cob_date, window)
+
+
+

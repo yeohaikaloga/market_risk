@@ -12,7 +12,7 @@ class VaRCalculator:
         Calculate historical VaR based on the worse (max) of lookback and inverse PnLs over a window.
 
         Args:
-            date (str): Business date (used only for fallback).
+            cob_date (str): Business date (used only for fallback).
             lookback_df (pd.DataFrame or pd.Series): Lookback PnL data.
             inverse_df (pd.DataFrame or pd.Series): Inverse PnL data.
             percentile (float): Confidence level (e.g., 95 = 5% tail).

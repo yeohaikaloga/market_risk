@@ -10,10 +10,8 @@ from price_series_generator.cotton_basis_generator import crop_dict
 from contract_ref_loader.physical_contract_ref_loader import PhysicalContractRefLoader
 
 
-def fy24_cotton_basis_workflow(write_to_excel: bool = True, apply_smoothing: bool = True):
+def fy24_cotton_basis_workflow(cob_date: str, window: int, write_to_excel: bool = True, apply_smoothing: bool = True):
     prod_engine = get_engine('prod')
-    cob_date = '2025-07-10'
-    window = 260
     trailing_days_before_start = 20
     no_of_days = window + trailing_days_before_start
     biz_days = get_prev_biz_days_list(date=cob_date, no_of_days=no_of_days)

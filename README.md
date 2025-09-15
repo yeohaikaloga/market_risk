@@ -26,28 +26,89 @@ This project provides modular components to:
 
 <pre>
 market_risk/
+├── .gitignore
+├── README.md
+├── config.py
+├── main.py
+├── test_and_store.py
 │
-├── contract/                  # Definitions of contracts such as futures contracts, commodity specifications, and related metadata.
+├── contract_ref_loader/
+│ ├── contract_ref_loader.py
+│ ├── derivatives_contract_ref_loader.py
+│ └── physical_contract_ref_loader.py
 │
-├── db/                        # Database models, schema definitions, and connection handlers for storing market data and analysis results.
+├── db/
+│ └── db_connection.py
 │
-├── generated_price_series/    # Modules dedicated to generating synthetic price series for various commodities and scenarios.
+├── financial_calculations/
+│ ├── init.py
+│ ├── repricing.py
+│ ├── returns.py
+│ ├── var_calculator.py
+│ └── volatility.py
 │
-├── workflow/                  # Workflows orchestrating risk analysis and processing pipelines, including cotton_basis_workflow.py.
-│   ├── cotton_basis_workflow.py  # Specific workflow for analyzing cotton basis risk.
-│   └── ...                   # Other workflows (if any).
+├── pnl_analyzer/
+│ ├── init.py
+│ └── pnl_analyzer.py
 │
-├── price/                     # Functions and classes for price series manipulation, transformations, calculations, and related analytics.
+├── position_loader/
+│ ├── init.py
+│ ├── derivatives_position_loader.py
+│ ├── physical_position_loader.py
+│ └── position_loader.py
 │
-├── utils/                     # Utility functions, helpers, and shared tools used across modules.
+├── price_series_generator/
+│ ├── init.py
+│ ├── cotton_basis_generator.py
+│ ├── generic_curve_generator.py
+│ ├── price_series_generator.py
+│ ├── rubber_basis_generator.py
+│ └── spread_generator.py
 │
-├── main.py                    # Main entry point script to execute workflows or analyses.
+├── price_series_loader/
+│ ├── init.py
+│ ├── basis_price_loader.py
+│ ├── derivatives_price_loader.py
+│ ├── physical_price_loader.py
+│ └── price_series_loader.py
 │
-├── config.py                  # Configuration settings, constants, and environment variables.
+├── quality_checker/
+│ ├── init.py
+│ └── cotton_var_checker.py
 │
-├── README.md                  # Project documentation (this file).
+├── report/
+│ ├── init.py
+│ └── report.py
 │
-└── .gitignore                 # Git ignore rules to exclude files/folders from version control.
+├── utils/
+│ ├── contract_utils.py
+│ ├── date_utils.py
+│ ├── fx_converter.py
+│ ├── position_utils.py
+│ ├── unit_converter.py
+│ ├── validation_utils.py
+│ └── var_utils.py
+│
+├── workflow/
+│ ├── cotton_basis_calculator_workflow.py
+│ ├── options_repricer_workflow.py
+│ ├── var_generator_workflow.py
+│ ├── var_generator_workflow_v2.py
+│ └── var_report_builder_workflow.py
+│
+├── data/ # (TBC)
+│ └── sample/
+│ ├── positions.csv
+│ └── prices.csv
+│
+├── notebooks/ # (TBC)
+│ └── cotton_var_demo.ipynb
+│
+├── tests/ # (TBC)
+│ ├── init.py
+│ └── test_pnl_analyzer.py
+│
+└── requirements.txt # (TBC)
 </pre>
 
 ---

@@ -1,62 +1,8 @@
 import pandas as pd
 from sqlalchemy import text
 from contract_ref_loader.contract_ref_loader import ContractRefLoader
-from utils.contract_utils import month_codes
+from utils.contract_utils import month_codes, instrument_ref_dict
 from utils.contract_utils import custom_monthly_contract_sort_key
-
-instrument_ref_dict = {'CT': {'futures_category': 'Fibers', 'to_USD_conversion': 2204.6/100, 'currency': 'USc',
-                              'units': 'lbs', 'lots_to_MT_conversion': 22.679851220176},
-                       'VV': {'futures_category': 'Fibers', 'to_USD_conversion': 1, 'currency': 'CNY', 'units': 'MT',
-                              'lots_to_MT_conversion': 5},
-                       'CCL': {'futures_category': 'Fibers', 'to_USD_conversion': 1000/355.56, 'currency': 'INR',
-                               'units': 'candy', 'lots_to_MT_conversion': 22.679851220176},
-                       'OR': {'futures_category': 'Industrial Material'},
-                       'JN': {'futures_category': 'Industrial Material'},
-                       'SRB': {'futures_category': 'Industrial Material'},
-                       'RT': {'futures_category': 'Industrial Material'},
-                       'BDR': {'futures_category': 'Industrial Material'},
-                       'RG': {'futures_category': 'Industrial Material'},
-                       'C ': {'futures_category': 'Corn', 'to_USD_conversion': 39.36821/100, 'currency': 'USc',
-                              'lots_to_MT_conversion': 1},
-                       'EP': {'futures_category': 'Corn', },
-                       'CRD': {'futures_category': 'Corn'},
-                       'AC': {'futures_category': 'Corn'},
-                       'CA': {'futures_category': 'Wheat'},
-                       'W ': {'futures_category': 'Wheat', 'to_USD_conversion': 36.74371/100, 'currency': 'USc',
-                              'lots_to_MT_conversion': 1},
-                       'KW': {'futures_category': 'Wheat', },
-                       'MW': {'futures_category': 'Wheat'},
-                       'KFP': {'futures_category': 'Wheat'},
-                       'S ': {'futures_category': 'Soy', 'to_USD_conversion': 36.74371/100, 'currency': 'USc',
-                              'lots_to_MT_conversion': 1},
-                       'SM': {'futures_category': 'Soy'},
-                       'BO': {'futures_category': 'Soy'},
-                       'AE': {'futures_category': 'Soy'},
-                       'SRS': {'futures_category': 'Soy'},
-                       'AK': {'futures_category': 'Soy'},
-                       'BP': {'futures_category': 'Soy'},
-                       'SH': {'futures_category': 'Soy'},
-                       'DL': {'futures_category': 'Refined Products'},
-                       'QS': {'futures_category': 'Refined Products'},
-                       'THE': {'futures_category': 'Refined Products'},
-                       'HO': {'futures_category': 'Refined Products'},
-                        'SB': {'futures_category': 'Foodstuff', 'to_USD_conversion': 2204.6/100, 'currency': 'USc',
-                               'units': 'lbs', 'lots_to_MT_conversion': 22.679851220176},
-                       'QW': {'futures_category': 'Foodstuff'},
-                       'DF': {'futures_category': 'Foodstuff'},
-                       'CC': {'futures_category': 'Foodstuff'},
-                       'KC': {'futures_category': 'Foodstuff'},
-                       'QC': {'futures_category': 'Foodstuff'},
-                       'AX': {'futures_category': 'Foodstuff'},
-                       'KO': {'futures_category': 'Foodstuff'},
-                       'PAL': {'futures_category': 'Foodstuff'},
-                       'VPC': {'futures_category': 'Foodstuff'},
-                       'MDS': {'futures_category': 'Foodstuff'},
-                       'DA': {'futures_category': 'Foodstuff'},
-                       'IJ': {'futures_category': 'Other Grain'},
-                       'RS': {'futures_category': 'Other Grain'},
-                       'ZRR': {'futures_category': 'Other Grain'},
-                       'LHD': {'futures_category': 'Livestock'}}
 
 
 class DerivativesContractRefLoader(ContractRefLoader):

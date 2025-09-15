@@ -152,10 +152,11 @@ class CottonBasisGenerator(PriceSeriesGenerator):
         smooth_abs_ret_choices = [crop_basis_df[col] for col in smooth_abs_ret_cols][:len(abs_ret_conditions)]
         crop_basis_df['final AR series'] = np.select(abs_ret_conditions, abs_ret_choices, default=0)
         crop_basis_df['final AR (sm) series'] = np.select(abs_ret_conditions, smooth_abs_ret_choices, default=0)
+
         return crop_basis_df
 
     def generate_all_crop_basis_return_series(self, physical_contracts_and_prices: list[tuple],
-                                              apply_smoothing: bool = True):
+                                              apply_smoothing: bool=True):
         basis_df = pd.DataFrame()
 
         for physical_contract, crop_price_df_by_year in physical_contracts_and_prices:

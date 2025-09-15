@@ -1,9 +1,10 @@
 from position_loader.position_loader import PositionLoader
-from contract_ref_loader.derivatives_contract_ref_loader import instrument_ref_dict
+from utils.contract_utils import instrument_ref_dict
 import pandas as pd
 from sqlalchemy import text
 import re
 
+product_map = {'cotton': ['cto'], 'rms-cfs only': ['cfs'], 'rms': ['cfs', 'rmc'], 'rubber': ['rba', 'rbc']}
 
 class DerivativesPositionLoader(PositionLoader):
 
@@ -14,7 +15,7 @@ class DerivativesPositionLoader(PositionLoader):
 
     def load_position(self, date, product, trader_id=None, counterparty_id=None, region=None,
                       books=None) -> pd.DataFrame:
-        product_map = {'cotton': ['cto'], 'rms-cfs only': ['cfs'], 'rms': ['cfs', 'rmc'], 'rubber': ['rba', 'rbc']}
+
         # Add more products as needed
 
         if product not in product_map:
@@ -306,7 +307,7 @@ class DerivativesPositionLoader(PositionLoader):
 
         return df
 
-    def load_opera_sensitivities(self, position_df: pd.DataFrame, sensitivity_type: str) -> pd.DataFrame:
+    def load_opera_sensitivities(self, position_df: pd.DataFrame, sensitivity_type: str, product: str) -> pd.DataFrame:
         """
         Fetch and deduplicate OPERA sensitivities from the DB for the given positions.
 
@@ -322,13 +323,18 @@ class DerivativesPositionLoader(PositionLoader):
         if sensitivity_type not in supported_types:
             raise ValueError(f"Unsupported sensitivity_type '{sensitivity_type}'. Must be one of {supported_types}.")
 
+        if product not in product_map:
+            raise ValueError(f"Unsupported product: {product}")
+
         # Prepare query values
         position_df['cob_date'] = pd.to_datetime(position_df['cob_date'], errors='coerce')
         cob_dates = position_df['cob_date'].dt.strftime('%Y-%m-%d').unique()
         security_ids = position_df['security_id'].unique()
+        opera_product = product_map[product]
 
         cob_dates_sql = ", ".join(f"'{d}'" for d in cob_dates)
         security_ids_sql = ", ".join(f"'{sid}'" for sid in security_ids)
+        opera_product_sql = ", ".join(f"'{p}'" for p in opera_product)
 
         sens_query = f"""
         SELECT security_id, cob_date, {sensitivity_type}
@@ -336,6 +342,7 @@ class DerivativesPositionLoader(PositionLoader):
         WHERE cob_date IN ({cob_dates_sql})
         AND security_id IN ({security_ids_sql})
         AND {sensitivity_type} IS NOT NULL
+        AND opera_product IN ({opera_product_sql})
         """
         print(sens_query)
 

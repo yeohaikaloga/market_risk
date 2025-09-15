@@ -5,6 +5,11 @@ from utils.contract_utils import get_month_code
 from utils.contract_utils import custom_monthly_contract_sort_key
 from datetime import datetime
 
+fy24_unit_to_cotlook_basis_origin_dict = {'USA EQUITY': 'Memphis/Orleans/Texas', 'USA': 'Memphis/Orleans/Texas',
+                                          'BRAZIL': 'Brazilian', 'SECO': "Ivory Coast Manbo/s",
+                                          'W. AFRICA': "Burkina Faso Bola/s", 'TOGO': "Burkina Faso Bola/s",
+                                          'CHAD': "Burkina Faso Bola/s", 'E. AFRICA': "Burkina Faso Bola/s"}
+
 
 class PhysicalPositionLoader(PositionLoader):
 
@@ -162,4 +167,27 @@ class PhysicalPositionLoader(PositionLoader):
             print(invalid[['region', 'subportfolio', 'underlying_bbg_ticker']])
         else:
             print("All positions successfully mapped to a generic curve.")
+        return df
+
+    @staticmethod
+    def map_basis_series(row, mapping_dict):
+        region = str(row.get('region', ''))
+        exposure = str(row.get('exposure', ''))
+        if exposure == 'BASIS (NET PHYS)':
+            result = mapping_dict.get(region)
+            if result is None:
+                result = 'A Index'
+            return result
+        return None
+
+    def assign_basis_series(self, df: pd.DataFrame, dict) -> pd.DataFrame:
+        df = df.copy()
+        df['basis_series'] = df.apply(lambda row: self.map_basis_series(row, fy24_unit_to_cotlook_basis_origin_dict), axis=1)
+        missing = df[df['basis_series'].isna()]
+        if not missing.empty:
+            print(f"Warning: {len(missing)} rows have no basis_series mapping.")
+            print(missing[['region', 'exposure']])
+        else:
+            print("All rows successfully mapped to basis_series.")
+
         return df
