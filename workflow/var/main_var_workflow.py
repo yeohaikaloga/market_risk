@@ -1,4 +1,4 @@
-from workflow.shared.data_preparation_workflow import prepare_data_for_var
+from workflow.shared.data_preparation_workflow import prepare_returns_and_positions_data, prepare_pos_data_for_var
 from workflow.shared.pnl_calculator_workflow import generate_pnl_vectors, analyze_and_export_unit_pnl
 from workflow.var.var_generator_workflow import generate_var, build_var_report, build_cotton_var_report_exceptions, build_cotton_price_var_report_exceptions
 import pickle
@@ -12,12 +12,16 @@ def main_var_workflow(cob_date: str, product: str, method: str, window: int, wit
 
     filename = f"{cob_date}_{product[:3]}_{method}_var_report.xlsx"
 
-    # === STEP 1: Prepare Data ===
-    instrument_dict, combined_pos_df, basis_abs_ret_df = prepare_data_for_var(
+    # #=== STEP 1: Prepare Data ===
+    instrument_dict, combined_pos_df = prepare_returns_and_positions_data(
         product=product,
         cob_date=cob_date,
         window=window
     )
+    combined_pos_df = prepare_pos_data_for_var(
+        combined_pos_df=combined_pos_df,
+        method=method)
+
     if with_price_var:
         combined_price_pos_df = combined_pos_df[combined_pos_df['books'] == 'PRICE']
     print("[INFO] Step 1: Data preparation completed.")
@@ -25,49 +29,47 @@ def main_var_workflow(cob_date: str, product: str, method: str, window: int, wit
     # f = open('instrument_dict.pkl', 'wb')
     # pickle.dump(instrument_dict, f)
     # f.close()
-    # basis_abs_ret_df.to_pickle('basis_abs_ret_df.pkl')
     # combined_pos_df.to_pickle('combined_pos_df.pkl')
     # combined_price_pos_df.to_pickle('combined_price_pos_df.pkl')
-
     # f = open('instrument_dict.pkl', 'rb')
     # instrument_dict = pickle.load(f)
     # f.close()
-    # basis_abs_ret_df = pd.read_pickle('basis_abs_ret_df.pkl')
     # combined_pos_df = pd.read_pickle('combined_pos_df.pkl')
     # combined_price_pos_df = pd.read_pickle('combined_price_pos_df.pkl')
 
     # === STEP 2: Generate PnL Vectors ===
-    if method == 'linear':
+    if method == 'linear' or method == 'non-linear (monte carlo)':
         print('generate long_pnl_df')
         long_pnl_df = generate_pnl_vectors(
             combined_pos_df=combined_pos_df,
             instrument_dict=instrument_dict,
-            basis_abs_ret_df=basis_abs_ret_df,
             method=method
         )
         print('long_pnl_df done')
+        print('shape: ', str(combined_pos_df.shape))
         if with_price_var:
             long_price_pnl_df = generate_pnl_vectors(
                 combined_pos_df=combined_price_pos_df,
                 instrument_dict=instrument_dict,
-                basis_abs_ret_df=basis_abs_ret_df,
                 method=method
             )
 
         print("[INFO] Step 2: PnL vectors generated.")
     else:
         raise NotImplementedError(f"Method '{method}' not supported yet.")
-    #
+    # #
     # combined_pos_df.to_pickle('combined_pos_df.pkl')
     # long_pnl_df.to_pickle('long_pnl_df.pkl')
-
+    # f = open('instrument_dict.pkl', 'wb')
+    # pickle.dump(instrument_dict, f)
+    # f.close()
     # f = open('instrument_dict.pkl', 'rb')
     # instrument_dict = pickle.load(f)
     # f.close()
-    # basis_abs_ret_df = pd.read_pickle('basis_abs_ret_df.pkl')
     # combined_pos_df = pd.read_pickle('combined_pos_df.pkl')
     # long_pnl_df = pd.read_pickle('long_pnl_df.pkl')
-    #
+    # #
+
     analyze_and_export_unit_pnl(
         long_pnl_df=long_pnl_df,
         combined_pos_df=combined_pos_df,
@@ -82,7 +84,7 @@ def main_var_workflow(cob_date: str, product: str, method: str, window: int, wit
         cob_date=cob_date,
         window=window
     )
-
+    print('Main VaR done')
     if with_price_var:
         price_var_data_df = generate_var(
             combined_pos_df=combined_price_pos_df,
@@ -90,6 +92,7 @@ def main_var_workflow(cob_date: str, product: str, method: str, window: int, wit
             cob_date=cob_date,
             window=window
         )
+    print('Price VaR done')
 
     print("[INFO] Step 3: VaR calculation completed.")
     # var_data_df.to_pickle('var_data_df.pkl')

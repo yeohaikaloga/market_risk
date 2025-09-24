@@ -5,12 +5,7 @@ import numpy as np
 import pandas as pd
 import math
 
-crop_dict = {'Brazilian': {'grade': 'M_1-1/8"_std', 'type': None},
-             'Burkina Faso Bola/s': {'grade': 'SM_1-1/8"_h', 'type': 'Bola/s'},
-             'Ivory Coast Manbo/s': {'grade': 'SM_1-1/8"_h', 'type': 'Manbo/s'},
-             'Mali Juli/s': {'grade': 'SM_1-1/8"_h', 'type': 'Juli/s'},
-             'Memphis/Orleans/Texas': {'grade': 'M_1-1/8"_std', 'type': 'MOT'},
-             'A Index': {'grade': 'M_1-1/8"_std', 'type': 'A Index'}}
+
 
 
 class CottonBasisGenerator(PriceSeriesGenerator):

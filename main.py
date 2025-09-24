@@ -1,7 +1,8 @@
 import pandas as pd
 
 from workflow.var.main_var_workflow import main_var_workflow
-
+from workflow.shared.data_preparation_workflow import generate_ex_gin_s6_returns_df
+from workflow.shared.data_preparation_workflow import generate_cotlook_returns_df
 if __name__ == '__main__':
 
     pd.set_option('display.max_columns', None)
@@ -10,10 +11,15 @@ if __name__ == '__main__':
     cob_date = '2025-08-22'
     # Note: Greeks in DB only start from 20 Aug 2025
     product = 'cotton'
-    method = 'linear'
+    #method = 'linear'
+    method = 'non-linear (monte carlo)'
     window = 260
-
+    #generate_ex_gin_s6_returns_df(cob_date=cob_date, window=window)
     main_var_workflow(cob_date=cob_date, product=product, method=method, window=window, with_price_var=True, write_to_excel=True)
+
+    #generate_cotlook_returns_df(cob_date, window)
+
+
 
     # options_workflow()
     #generate_cotton_var_dict = generate_var_workflow(product=product, method=method, cob_date=cob_date, window=window)

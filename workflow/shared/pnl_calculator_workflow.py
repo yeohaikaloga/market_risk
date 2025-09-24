@@ -15,11 +15,9 @@ import os
 
 from pnl_analyzer.pnl_analyzer import PnLAnalyzer
 
-
 def generate_pnl_vectors(
     combined_pos_df: pd.DataFrame,
     instrument_dict: Dict[str, Any],
-    basis_abs_ret_df: pd.DataFrame,
     method: str = 'linear'
 ) -> pd.DataFrame:
     """
@@ -42,45 +40,87 @@ def generate_pnl_vectors(
         - cob_date
         - method
     """
-    if method != 'linear':
-        raise NotImplementedError(f"Method '{method}' not yet supported.")
 
     # Add position_index if not exists
     if 'position_index' not in combined_pos_df.columns:
-        product = combined_pos_df['product'].iloc[0] if 'product' in combined_pos_df.columns else 'UNK'
-        cob_date = combined_pos_df['cob_date'].iloc[0] if 'cob_date' in combined_pos_df.columns else 'UNK'
         combined_pos_df['position_index'] = (
-            product[:3] + '_L_' + str(cob_date) + '_' +
-            combined_pos_df.index.map(lambda i: str(i).zfill(4))
+                combined_pos_df['product'].str[:3] + '_L_' +
+                combined_pos_df['cob_date'].astype(str) + '_' +
+                combined_pos_df.index.map(lambda i: str(i).zfill(4))
         )
-
     pnl_dfs = []
 
     for idx, row in combined_pos_df.iterrows():
         instrument_name = row['instrument_name']
-        generic_curve = row['generic_curve']
-        basis_series = row['basis_series']
+        #generic_curve = row['generic_curve']
+        #basis_series = row['basis_series']
+        if method == 'linear':
+            linear_var_map = row['linear_var_map']
+        elif method == 'non-linear (monte carlo)':
+            monte_carlo_risk_factor = row['monte_carlo_var_risk_factor']
         position_index = row['position_index']
         delta = row['delta']
         exposure = row['exposure']
         to_usd = row['to_USD_conversion']
 
         if exposure == 'OUTRIGHT':
-            # Get $ returns for this generic curve
-            returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][generic_curve]
+            if instrument_name in instrument_dict.keys():
+                if instrument_name == 'VV':
+                    if method == 'linear':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][linear_var_map]
+                        print(exposure, position_index, instrument_name, linear_var_map, returns_series.tail())
+                    elif method == 'non-linear (monte carlo)':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][monte_carlo_risk_factor]
+
+                    returns_series = returns_series / 7.1675
+                    print(exposure, instrument_name, returns_series.tail())
+
+                elif instrument_name == 'CCL':
+                    if method == 'linear':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][linear_var_map]
+                        print(exposure, position_index, instrument_name, linear_var_map, returns_series.tail())
+                    elif method == 'non-linear (monte carlo)':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][monte_carlo_risk_factor]
+
+                    returns_series = returns_series / 87.5275
+                    print(exposure, instrument_name, returns_series.tail())
+
+                else:
+                    # Get $ returns for this generic curve
+                    print(exposure, instrument_name, position_index)
+                    if method == 'linear':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][linear_var_map]
+                    elif method == 'non-linear (monte carlo)':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][monte_carlo_risk_factor]
+
+            else:
+                returns_series = instrument_dict['PHYS'][instrument_name]['relative_returns_$']
+                print(exposure, position_index, instrument_name, returns_series.tail())
+                returns_series = returns_series / 87.5275
+                print(exposure, instrument_name, returns_series.tail())
 
             # Calculate PnL
             pnl_series = delta * returns_series * to_usd
+            df = pnl_series.to_frame(name='lookback_pnl')
+
+        elif exposure == 'BASIS (NET PHYS)':
+            if method == 'linear':
+                basis_returns_series = instrument_dict['BASIS']['abs_returns_$_df'][linear_var_map]
+                pnl_series = delta * basis_returns_series * to_usd
+                df = pnl_series.to_frame(name='lookback_pnl')
+            elif method == 'non-linear (monte carlo)':
+                if monte_carlo_risk_factor == 'CT1':
+                    returns_series = instrument_dict['CT']['relative_returns_$_df'][monte_carlo_risk_factor]
+                else:
+                    returns_series = instrument_dict['PHYS']['COTLOOK'][monte_carlo_risk_factor][monte_carlo_risk_factor]
+                pnl_series = delta * returns_series * to_usd
+                df = pnl_series.to_frame(name='lookback_pnl')
 
         else:
-            basis_returns_series = basis_abs_ret_df[basis_series]
-
-            # Calculate PnL
-            pnl_series = delta * basis_returns_series * to_usd
-
+            print(exposure, position_index, '[WARNING] Exposure is not Outright or Basis (Net Phys)')
 
         # Build DataFrame for this position
-        df = pnl_series.to_frame(name='lookback_pnl')
+
         df['inverse_pnl'] = -df['lookback_pnl']
         df['position_index'] = position_index
         df['cob_date'] = row.get('cob_date', None)
@@ -111,9 +151,10 @@ def analyze_and_export_unit_pnl(
     outright_analyzer = analyzer.filter(exposure='OUTRIGHT', position_index=position_index_list)
     basis_analyzer = analyzer.filter(exposure='BASIS (NET PHYS)', position_index=position_index_list)
 
-    unit_outright_lookback = outright_analyzer.pivot(index='pnl_date', columns=['region','position_index'], values='lookback_pnl')
-    unit_outright_inverse = outright_analyzer.pivot(index='pnl_date', columns=['region','position_index'], values='inverse_pnl')
-    unit_basis_lookback = basis_analyzer.pivot(index='pnl_date', columns=['region','position_index'], values='lookback_pnl')
+    unit_outright_lookback = outright_analyzer.pivot(index='pnl_date', columns=['region', 'position_index'], values='lookback_pnl')
+    unit_outright_inverse = outright_analyzer.pivot(index='pnl_date', columns=['region', 'position_index'], values='inverse_pnl')
+    unit_basis_lookback = basis_analyzer.pivot(index='pnl_date', columns=['region', 'position_index'], values='lookback_pnl')
+    #unit_basis_inverse = basis_analyzer.pivot(index='pnl_date', columns=['region', 'position_index'], values='inverse_pnl')
 
     if write_to_excel:
         if os.path.exists(filename):
@@ -127,5 +168,6 @@ def analyze_and_export_unit_pnl(
             unit_outright_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='outright_lookback', index=True)
             unit_outright_inverse.sort_index(ascending=False).to_excel(writer, sheet_name='outright_inverse', index=True)
             unit_basis_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='basis_lookback', index=True)
+            #unit_basis_inverse.sort_index(ascending=False).to_excel(writer, sheet_name='basis_inverse', index=True)
 
     print(f"Export for unit pnl vectors completed: f'{filename}'")

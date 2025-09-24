@@ -5,12 +5,11 @@ from sqlalchemy import text
 
 class PhysicalPriceLoader(PriceLoader):
 
-    def load_prices(self, start_date, end_date, reindex_dates=None, instrument_id=None) -> pd.DataFrame:
+    def load_prices(self, start_date, end_date, data_source, reindex_dates=None, instrument_id=None) -> pd.DataFrame:
         instrument_id = instrument_id or self.instrument_id
         grade = self.params.get('grade')
         origin = self.params.get('origin')
         type_ = self.params.get('type')
-        data_source = self.params.get('data_source', 'cotlook')
         external_name_filter = f"pc.external_name = '{instrument_id}'"
         if instrument_id == 'A Index':
             external_name_filter = f"pc.external_name LIKE '%A Index'"
@@ -52,6 +51,22 @@ class PhysicalPriceLoader(PriceLoader):
             raise ValueError(f"Duplicate rows found for (tdate, crop_year):\n{duplicates_check}")
 
         print("Validation passed: No duplicate (tdate, crop_year) pairs.")
+
+        if reindex_dates is not None:
+            df = df.set_index('tdate').reindex(reindex_dates).reset_index()
+
+        return df
+
+    def load_ex_gins6_prices_from_staging(self, start_date, end_date, data_source, reindex_dates=None) -> pd.DataFrame:
+
+        if data_source == 'EX GIN S6':
+            query = f"""
+            SELECT * FROM staging.cotton_shankar6_price
+            WHERE date BETWEEN '{start_date}' AND '{end_date}'
+            """
+
+        with self.source.connect() as conn:
+            df = pd.read_sql_query(text(query), conn)
 
         if reindex_dates is not None:
             df = df.set_index('tdate').reindex(reindex_dates).reset_index()

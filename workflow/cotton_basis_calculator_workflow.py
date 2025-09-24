@@ -6,8 +6,8 @@ from contract_ref_loader.derivatives_contract_ref_loader import DerivativesContr
 from price_series_loader.derivatives_price_loader import DerivativesPriceLoader
 from price_series_loader.physical_price_loader import PhysicalPriceLoader
 from price_series_generator.cotton_basis_generator import CottonBasisGenerator
-from price_series_generator.cotton_basis_generator import crop_dict
 from contract_ref_loader.physical_contract_ref_loader import PhysicalContractRefLoader
+from contract_ref_loader.physical_contract_ref_loader import crop_dict
 
 
 def fy24_cotton_basis_workflow(cob_date: str, window: int, write_to_excel: bool = True, apply_smoothing: bool = True):
@@ -55,7 +55,7 @@ def fy24_cotton_basis_workflow(cob_date: str, window: int, write_to_excel: bool 
         physical_contract = PhysicalContractRefLoader(instrument_name=crop_name, source=prod_engine, params=crop_params)
         physical_contract.load_ref_data()
         crop_price = PhysicalPriceLoader(instrument_name=crop_name, source=prod_engine, params=crop_params)
-        crop_price_df = crop_price.load_prices(start_date=start_date, end_date=cob_date)
+        crop_price_df = crop_price.load_prices(start_date=start_date, end_date=cob_date, data_source='cotlook')
         crop_price_df_by_year = crop_price_df.pivot(index='tdate', columns='crop_year', values='px_settle')
         physical_contracts_and_prices.append((physical_contract, crop_price_df_by_year))
 

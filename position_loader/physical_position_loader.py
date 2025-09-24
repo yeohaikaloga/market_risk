@@ -63,13 +63,14 @@ class PhysicalPositionLoader(PositionLoader):
         return df
 
     def _load_filtered_cotton_positions(self, cob_date: str) -> pd.DataFrame:
-        query = 'SELECT * FROM staging.cotton_physical_positions'
+        query = 'SELECT * FROM staging.cotton_physical_positions WHERE quantity != 0'
+        print(query)
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn)
 
+        print(df.head())
         # Apply consistent filters
         df = df[df['cob'] == cob_date]
-        df = df[df['quantity'] != 0]
         df = df[df['UNIT'] != 'TOTAL']
         return df
 
@@ -77,18 +78,15 @@ class PhysicalPositionLoader(PositionLoader):
         df = self._load_filtered_cotton_positions(cob_date)
         return df
 
-    def load_cotton_unit_region_mapping_from_staging(self, cob_date: str) -> dict:
-        df = self._load_filtered_cotton_positions(cob_date)
-        return dict(zip(df['UNIT'], df['REGION']))
-
     @staticmethod
-    def map_bbg_tickers(instrument_name: str, terminal_month: datetime) -> tuple[str | None, str | None]:
+    def map_bbg_tickers(instrument_name: str, terminal_month: datetime, instrument_ref_dict: dict) -> tuple[str | None, str | None]:
         """
         Returns both Bloomberg-style option ticker and underlying ticker.
         Returns: (option_ticker, underlying_ticker)
         """
         try:
-            if not isinstance(instrument_name, str) or not isinstance(terminal_month, datetime):
+            if (not isinstance(instrument_name, str) or instrument_name not in instrument_ref_dict.keys()
+                    or not isinstance(terminal_month, datetime)):
                 return None, None
 
             month = terminal_month.month
@@ -103,10 +101,10 @@ class PhysicalPositionLoader(PositionLoader):
         except Exception:
             return None, None
 
-    def assign_bbg_tickers(self, df: pd.DataFrame) -> pd.DataFrame:
+    def assign_bbg_tickers(self, df: pd.DataFrame, instrument_ref_dict: dict) -> pd.DataFrame:
         df = df.copy()
         df[['bbg_ticker', 'underlying_bbg_ticker']] = df.apply(
-            lambda row: pd.Series(self.map_bbg_tickers(row['instrument_name'], row['terminal_month'])), axis=1)
+            lambda row: pd.Series(self.map_bbg_tickers(row['instrument_name'], row['terminal_month'], instrument_ref_dict)), axis=1)
 
         for col in ['bbg_ticker', 'underlying_bbg_ticker']:
             invalid = df[df[col].isna()]
@@ -129,8 +127,12 @@ class PhysicalPositionLoader(PositionLoader):
                 return contract_to_curve_map[c]
 
         # No later contract found — use the last available
-        last_contract = sorted_contracts[-1]
-        return contract_to_curve_map[last_contract]
+        print(contract, sorted_contracts)
+        if len(sorted_contracts) > 0:
+            last_contract = sorted_contracts[-1]
+            return contract_to_curve_map[last_contract]
+        else:
+            return None
 
     @staticmethod
     def map_generic_curve(row, instrument_dict):
@@ -139,8 +141,8 @@ class PhysicalPositionLoader(PositionLoader):
 
         instrument_name = str(row.get('instrument_name', '')).upper()
         instrument_info = instrument_dict.get(instrument_name)
-        if not instrument_info:
-            print(f"[WARN] Instrument '{instrument_name}' not found in instrument_dict.")
+        if not instrument_info or not isinstance(instrument_info, dict):
+            print(f"[WARN] Instrument '{instrument_name}' not found or invalid in instrument_dict.")
             return None
 
         curve_map = instrument_info.get('contract_to_curve_map', {})

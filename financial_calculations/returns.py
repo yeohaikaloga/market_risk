@@ -5,13 +5,24 @@ import numpy as np
 def relative_returns(prices: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Series:
     """
     Calculate relative returns (percentage change) for a Series or DataFrame.
+    Cleans data by removing zeros, infs, and handling NaNs.
     """
-    if isinstance(prices, pd.Series):
-        return prices.pct_change(fill_method=None)
-    elif isinstance(prices, pd.DataFrame):
-        return prices.pct_change(fill_method=None)
-    else:
+    if not isinstance(prices, (pd.Series, pd.DataFrame)):
         raise TypeError("Input must be a pandas Series or DataFrame.")
+
+    # Replace zero prices with NaN to avoid divide-by-zero
+    prices = prices.replace(0, np.nan)
+
+    # Calculate percentage change
+    returns = prices.pct_change(fill_method=None)
+
+    # Replace inf and -inf with NaN
+    returns = returns.replace([np.inf, -np.inf], np.nan)
+
+    # Optional: drop all-NaN rows (comment out if not desired)
+    returns = returns.dropna(how='all')
+
+    return returns
 
 
 def absolute_returns(prices: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Series:

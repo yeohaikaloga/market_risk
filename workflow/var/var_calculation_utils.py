@@ -52,7 +52,7 @@ def build_position_index_df(
     records = []
 
     def get_position_data(analyzer):
-        if analyzer is None:
+        if not analyzer:
             return {
                 'outright_position_index_list': [],
                 'no_of_outright_positions': 0,
@@ -76,7 +76,7 @@ def build_position_index_df(
     # === Per-region entries ===
     region_list = pnl_analyzer._pos_and_pnl_df['region'].unique()
     for region in region_list:
-        if pnl_analyzer is not None:
+        if pnl_analyzer:
             region_analyzer = pnl_analyzer.filter(region=region)
             instruments = region_analyzer._pos_and_pnl_df['instrument_name'].unique()
 
@@ -93,7 +93,7 @@ def build_position_index_df(
 
         if 'CENTRAL ' in region:
             # NON-COTTON only for 'CENTRAL ' regions
-            if region_analyzer is not None:
+            if region_analyzer:
                 non_cotton_analyzer = region_analyzer.filter(
                     instrument_name=lambda c: c not in ['CT', 'VV', 'CCL']
                 )
@@ -107,7 +107,7 @@ def build_position_index_df(
 
             # Per-instrument entries
             for instrument_name in instruments:
-                if region_analyzer is not None:
+                if region_analyzer:
                     instrument_analyzer = region_analyzer.filter(instrument_name=instrument_name)
                     pos_data = get_position_data(instrument_analyzer)
                     records.append({
@@ -119,7 +119,7 @@ def build_position_index_df(
 
     # === Per-aggregate entries ===
     for agg_name, regions in region_aggregate_map.items():
-        if pnl_analyzer is not None:
+        if pnl_analyzer:
             agg_analyzer = pnl_analyzer.filter(region=regions)
 
             level = 'agg'
@@ -134,10 +134,11 @@ def build_position_index_df(
             })
 
         # COTTON only for aggregates
-        if agg_analyzer is not None:
+        if agg_analyzer:
             cotton_analyzer = agg_analyzer.filter(
-                instrument_name=lambda c: c in ['CT', 'VV', 'CCL']
+                instrument_name=lambda c: c in ['CT', 'VV', 'CCL', 'EX GIN S6']
             )
+            print(f"pos_data: {pos_data}, type: {type(pos_data)}")
             pos_data = get_position_data(cotton_analyzer)
             records.append({
                 'region_agg': agg_name,
@@ -220,9 +221,8 @@ def calculate_var_for_units(
             overall_var = var_calc.calculate_historical_var(
                 overall_lookback, overall_inverse, cob_date, p, window
             ) if overall_positions else 0
-
-            var_data_df.at[i, f'outright_{p}_var'] = int(outright_var)
-            var_data_df.at[i, f'basis_{p}_var'] = int(basis_var)
-            var_data_df.at[i, f'overall_{p}_var'] = int(overall_var)
+            var_data_df.at[i, f'outright_{p}_var'] = int(outright_var) if not pd.isna(outright_var) else None
+            var_data_df.at[i, f'basis_{p}_var'] = int(basis_var) if not pd.isna(basis_var) else None
+            var_data_df.at[i, f'overall_{p}_var'] = int(overall_var) if not pd.isna(overall_var) else None
 
     return var_data_df

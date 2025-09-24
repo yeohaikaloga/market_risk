@@ -52,7 +52,9 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         print('columns:', contracts)
         index = df.index
         generic_curve = pd.DataFrame(index=index,
-                                     columns=['final_price', 'active_contract', 'price_series_loader',
+                                     columns=['final_price',
+                                              'active_contract',
+                                              'price_series_loader',
                                               'adjustment_values'])
 
         # Load expiry and roll dates

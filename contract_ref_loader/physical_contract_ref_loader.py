@@ -2,7 +2,12 @@ from contract_ref_loader.contract_ref_loader import ContractRefLoader
 import pandas as pd
 from sqlalchemy import text
 
-
+crop_dict = {'Brazilian': {'grade': 'M_1-1/8"_std', 'type': None},
+             'Burkina Faso Bola/s': {'grade': 'SM_1-1/8"_h', 'type': 'Bola/s'},
+             'Ivory Coast Manbo/s': {'grade': 'SM_1-1/8"_h', 'type': 'Manbo/s'},
+             'Mali Juli/s': {'grade': 'SM_1-1/8"_h', 'type': 'Juli/s'},
+             'Memphis/Orleans/Texas': {'grade': 'M_1-1/8"_std', 'type': 'MOT'},
+             'A Index': {'grade': 'M_1-1/8"_std', 'type': 'A Index'}}
 class PhysicalContractRefLoader(ContractRefLoader):
 
     def __init__(self, instrument_name, source, params=None):
