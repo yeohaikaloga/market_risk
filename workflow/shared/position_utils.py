@@ -104,20 +104,3 @@ def calculate_net_position(row: pd.Series) -> float:
         )
     else:
         return float(row.get('quantity', 0.0))
-
-
-def validate_position_row(row: pd.Series, required_columns: list) -> bool:
-    """
-    Validate that a position row has all required columns and no nulls in critical fields.
-
-    Args:
-        row (pd.Series): Position row to validate
-        required_columns (list): List of column names that must be present and non-null
-
-    Returns:
-        bool: True if valid, False otherwise
-    """
-    for col in required_columns:
-        if col not in row or pd.isna(row[col]):
-            return False
-    return True

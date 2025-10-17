@@ -10,6 +10,7 @@ Returns dict with precomputed views for VaR, Stress, Attribution workflows.
 """
 
 import pandas as pd
+import numpy as np
 from typing import Dict, Any
 import os
 
@@ -58,14 +59,19 @@ def generate_pnl_vectors(
             linear_var_map = row['linear_var_map']
         elif method == 'non-linear (monte carlo)':
             monte_carlo_risk_factor = row['monte_carlo_var_risk_factor']
-        position_index = row['position_index']
+        position_index = row.get('position_index', f"error")
         delta = row['delta']
         exposure = row['exposure']
         to_usd = row['to_USD_conversion']
+        product = row['product']
+        df = pd.DataFrame(columns=['lookback_pnl'])
+        print(idx, position_index, delta, exposure)
 
         if exposure == 'OUTRIGHT':
+            print('outright')
             if instrument_name in instrument_dict.keys():
-                if instrument_name == 'VV':
+                if ((instrument_name == 'VV') or (instrument_name == 'BDR') or (instrument_name == 'SRB')
+                        or (instrument_name == 'RT')):
                     if method == 'linear':
                         returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][linear_var_map]
                         print(exposure, position_index, instrument_name, linear_var_map, returns_series.tail())
@@ -85,6 +91,16 @@ def generate_pnl_vectors(
                     returns_series = returns_series / 87.5275
                     print(exposure, instrument_name, returns_series.tail())
 
+                elif instrument_name == 'JN':
+                    if method == 'linear':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][linear_var_map]
+                        print(exposure, position_index, instrument_name, linear_var_map, returns_series.tail())
+                    elif method == 'non-linear (monte carlo)':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][monte_carlo_risk_factor]
+
+                    returns_series = returns_series / 148.9
+                    print(exposure, instrument_name, returns_series.tail())
+
                 else:
                     # Get $ returns for this generic curve
                     print(exposure, instrument_name, position_index)
@@ -94,28 +110,34 @@ def generate_pnl_vectors(
                         returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][monte_carlo_risk_factor]
 
             else:
+                print(instrument_name)
                 returns_series = instrument_dict['PHYS'][instrument_name]['relative_returns_$']
                 print(exposure, position_index, instrument_name, returns_series.tail())
-                returns_series = returns_series / 87.5275
+                returns_series = returns_series # / 87.5275
                 print(exposure, instrument_name, returns_series.tail())
 
             # Calculate PnL
             pnl_series = delta * returns_series * to_usd
             df = pnl_series.to_frame(name='lookback_pnl')
+            print(df.head(1))
 
         elif exposure == 'BASIS (NET PHYS)':
-            if method == 'linear':
-                basis_returns_series = instrument_dict['BASIS']['abs_returns_$_df'][linear_var_map]
-                pnl_series = delta * basis_returns_series * to_usd
-                df = pnl_series.to_frame(name='lookback_pnl')
-            elif method == 'non-linear (monte carlo)':
-                if monte_carlo_risk_factor == 'CT1':
-                    returns_series = instrument_dict['CT']['relative_returns_$_df'][monte_carlo_risk_factor]
-                else:
-                    returns_series = instrument_dict['PHYS']['COTLOOK'][monte_carlo_risk_factor][monte_carlo_risk_factor]
-                pnl_series = delta * returns_series * to_usd
-                df = pnl_series.to_frame(name='lookback_pnl')
-
+            print('basis')
+            if product == 'cotton':
+                if method == 'linear':
+                    returns_series = instrument_dict['BASIS']['abs_returns_$_df'][linear_var_map]
+                elif method == 'non-linear (monte carlo)':
+                    if monte_carlo_risk_factor == 'CT1':
+                        returns_series = instrument_dict['CT']['relative_returns_$_df'][monte_carlo_risk_factor]
+                    else:
+                        returns_series = instrument_dict['PHYS']['COTLOOK'][monte_carlo_risk_factor][monte_carlo_risk_factor]
+            elif product == 'rubber':
+                # Zero basis PnL vectors for rubber
+                sample_instrument = next(iter(instrument_dict.keys()))
+                ref_df = instrument_dict[sample_instrument]['relative_returns_$_df']
+                returns_series = pd.Series(np.zeros(len(ref_df)), index=ref_df.index)
+            pnl_series = delta * returns_series * to_usd
+            df = pnl_series.to_frame(name='lookback_pnl')
         else:
             print(exposure, position_index, '[WARNING] Exposure is not Outright or Basis (Net Phys)')
 

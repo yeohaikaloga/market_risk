@@ -36,7 +36,7 @@ class PnLAnalyzer:
             raise KeyError("Column 'position_index' not found in data.")
         return self._pos_and_pnl_df['position_index'].dropna().unique().tolist()
 
-    def pivot(self, index='unit', columns='pnl_date', values='lookback_pnl'):
+    def pivot(self, index='region', columns='pnl_date', values='lookback_pnl'):
         df = self._pos_and_pnl_df
 
         # Flatten index, columns, and values to lists for uniform checking

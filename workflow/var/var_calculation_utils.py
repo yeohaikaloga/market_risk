@@ -45,6 +45,26 @@ def get_cotton_region_aggregates(region_list: list[str]) -> dict[str, list[str]]
         'SUM COTTON EX CP/JS/US EQ[B]': sum_cotton_ex_cp_js_useq_basis,
     }
 
+def get_rubber_region_aggregates(region_list: list[str]) -> dict[str, list[str]]:
+    """
+    Define rubber-specific region aggregates for VaR reporting.
+    """
+    sum_prop_trading = ['SINGAPORE PROP 1', 'SINGAPORE PROP 2']
+    sum_sg_desk = ['MALAY', 'THAILAND 1', 'THAILAND 2'] + sum_prop_trading
+    sum_indoviet = ['INDO', 'VIETNAM']
+    sum_trading_supply_chain = sum_sg_desk + sum_indoviet + ['AFRICA', 'CHINA']
+    sum_midstream = ['IVC MANUFACTURING']
+    sum_rubber = sum_trading_supply_chain + sum_midstream
+
+    return {
+        'SG DESK': sum_sg_desk,
+        'INDOVIET': sum_indoviet,
+        'TRADING & SUPPLY CHAIN': sum_trading_supply_chain,
+        'MIDSTREAM': sum_midstream,
+        'RUBBER TOTAL': sum_rubber,
+        'PROP TRADING': sum_prop_trading
+    }
+
 def build_position_index_df(
     pnl_analyzer: PnLAnalyzer,
     region_aggregate_map: dict

@@ -78,10 +78,17 @@ class PositionLoader(ABC):
         basis_rows['leg_type'] = 'COTLOOK'
         ct_leg['leg_type'] = 'CT'
 
-
         # Combine back
         df = df[~((df['exposure'] == 'BASIS (NET PHYS)'))]  # remove original basis
         combined_df = pd.concat([df, basis_rows, ct_leg], ignore_index=True)
 
         print(f"Duplicated {len(basis_rows)} BASIS rows into CT legs.")
         return combined_df
+
+    @staticmethod
+    def map_rubber_unit(row):
+        portfolio = row['portfolio']
+
+        if not isinstance(portfolio, str):
+            return 'NULL'
+

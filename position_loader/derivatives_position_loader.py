@@ -1,5 +1,5 @@
 from position_loader.position_loader import PositionLoader
-from utils.contract_utils import instrument_ref_dict
+from utils.contract_utils import instrument_ref_dict, custom_monthly_contract_sort_key
 import pandas as pd
 from sqlalchemy import text
 import re
@@ -14,7 +14,7 @@ class DerivativesPositionLoader(PositionLoader):
         self.date = date
 
     def load_position(self, date, product, trader_id=None, counterparty_id=None, region=None,
-                      books=None) -> pd.DataFrame:
+                      book=None) -> pd.DataFrame:
 
         # Add more products as needed
 
@@ -22,8 +22,8 @@ class DerivativesPositionLoader(PositionLoader):
             raise ValueError(f"Unsupported product: {product}")
 
         if product != 'cotton':
-            if books is not None:
-                raise ValueError("The 'books' parameter is only valid for product='cotton'.")
+            if book is not None:
+                raise ValueError("The 'book' parameter is only valid for product='cotton'.")
             if region is not None:
                 raise ValueError("The 'region' parameter is only valid for product='cotton'.")
 
@@ -57,19 +57,19 @@ class DerivativesPositionLoader(PositionLoader):
                 prmte.updated_timestamp = (SELECT MAX(updated_timestamp) FROM staging.portfolio_region_mapping_table_ex)
             """)
 
-            excluded_books = ['ADMIN', 'NON OIL', 'POOL']
+            excluded_book = ['ADMIN', 'NON OIL', 'POOL']
 
-            if books is None or books == 'all':
+            if book is None or book == 'all':
                 where_conditions.append(
-                    "prmte.books NOT IN (" + ", ".join(f"'{b}'" for b in excluded_books) + ")"
+                    "prmte.books NOT IN (" + ", ".join(f"'{b}'" for b in excluded_book) + ")"
                 )
             else:
-                if isinstance(books, str):
-                    books = [books]
-                books_sql = ", ".join(f"'{b}'" for b in books)
-                excluded_books_sql = ", ".join(f"'{b}'" for b in excluded_books)
-                where_conditions.append(f"prmte.books IN ({books_sql})")
-                where_conditions.append(f"prmte.books NOT IN ({excluded_books_sql})")
+                if isinstance(book, str):
+                    book = [book]
+                book_sql = ", ".join(f"'{b}'" for b in book)
+                excluded_book_sql = ", ".join(f"'{b}'" for b in excluded_book)
+                where_conditions.append(f"prmte.books IN ({book_sql})")
+                where_conditions.append(f"prmte.books NOT IN ({excluded_book_sql})")
 
             if region is not None:
                 if isinstance(region, (list, tuple, set)):
@@ -100,6 +100,7 @@ class DerivativesPositionLoader(PositionLoader):
             FROM position_opera.position pos
             {' '.join(joins)}
             WHERE {' AND '.join(where_conditions)}
+            AND derivative_type in ('future', 'vanilla_call', 'vanilla_put')
             GROUP BY {', '.join(group_by_cols)}
         """
 
@@ -187,7 +188,7 @@ class DerivativesPositionLoader(PositionLoader):
             return None, None
 
         security_id = security_id.strip()
-        if not security_id.startswith("CM "):
+        if not (security_id.startswith("CM ") or security_id.startswith("IM ")):
             return None, None
 
         core = security_id[3:].strip()
@@ -243,15 +244,58 @@ class DerivativesPositionLoader(PositionLoader):
                 print(f"All security_ids successfully mapped to '{col}'.")
         return df
 
+    #TODO Add fallback assignment here. necessary for rubber.
+    @staticmethod
+    def map_generic_curve_with_fallback(contract, contract_to_curve_map):
+        """
+        Try to find the best generic curve match for a given contract.
+        Uses fallback logic if the exact contract is missing.
+        """
+        if contract in contract_to_curve_map:
+            return contract_to_curve_map[contract]
+
+        # Sort contracts using the provided sort key
+        sorted_contracts = sorted(contract_to_curve_map.keys(), key=custom_monthly_contract_sort_key)
+
+        # Find the next available later contract
+        for c in sorted_contracts:
+            if custom_monthly_contract_sort_key(c) > custom_monthly_contract_sort_key(contract):
+                return contract_to_curve_map[c]
+
+        # If no later contract is found — fallback to the last available
+        if len(sorted_contracts) > 0:
+            last_contract = sorted_contracts[-1]
+            print(f"[Fallback] {contract} not found — using last available contract {last_contract}")
+            return contract_to_curve_map[last_contract]
+
+        return None
+
     @staticmethod
     def map_generic_curve(row, instrument_dict):
-        instrument = row['product_code'].replace('CM ', '')  # e.g., 'CM CT' → 'CT'
+        instrument = row['product_code'].replace('CM ', '').replace('IM ','')
         if len(instrument) == 1:
             instrument = instrument + ' '
         contract = row['underlying_bbg_ticker'].replace(' Comdty', '')
-        if instrument in instrument_dict:
-            curve_map = instrument_dict[instrument].get('contract_to_curve_map', {})
-            return curve_map.get(contract)
+        instrument_info = instrument_dict.get(instrument)
+        if not instrument_info or not isinstance(instrument_info, dict):
+            print(f"[WARN] Instrument '{instrument}' not found or invalid in instrument_dict.")
+            return None
+
+        curve_map = instrument_info.get('contract_to_curve_map', {})
+
+        if contract in curve_map:
+            return curve_map[contract]
+
+        # Fallback to next available or last contract
+        fallback = DerivativesPositionLoader.map_generic_curve_with_fallback(
+            contract, curve_map
+        )
+        if fallback:
+            print(
+                f"[Fallback] {contract} mapped to {fallback} under instrument {instrument} for {row.get('security_id', '')}")
+            return fallback
+
+        print(f"[WARN] No mapping or fallback found for contract {contract} under instrument {instrument}")
         return None
 
     def assign_generic_curves(self, df: pd.DataFrame, instrument_dict: dict) -> pd.DataFrame:

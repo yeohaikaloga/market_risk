@@ -1,8 +1,7 @@
 from position_loader.position_loader import PositionLoader
 import pandas as pd
 from sqlalchemy import text
-from utils.contract_utils import get_month_code
-from utils.contract_utils import custom_monthly_contract_sort_key
+from utils.contract_utils import get_month_code, custom_monthly_contract_sort_key
 from datetime import datetime
 
 fy24_unit_to_cotlook_basis_origin_dict = {'USA EQUITY': 'Memphis/Orleans/Texas', 'USA': 'Memphis/Orleans/Texas',
@@ -76,6 +75,27 @@ class PhysicalPositionLoader(PositionLoader):
 
     def load_cotton_phy_position_from_staging(self, cob_date: str) -> pd.DataFrame:
         df = self._load_filtered_cotton_positions(cob_date)
+        return df
+
+    def _load_filtered_rubber_positions(self, cob_date: str) -> pd.DataFrame:
+        query = """
+            SELECT * 
+            FROM staging.ors_positions_updated
+            """
+        print(query)
+        with self.source.connect() as conn:
+            df = pd.read_sql_query(text(query), conn)
+
+        # Apply consistent filters
+        df['Delta Quantity'] = pd.to_numeric(df['Delta Quantity'], errors='coerce')
+        df = df[df['Delta Quantity'] != 0.0]
+        cob_date = cob_date + ' 00:00:00'
+        df= df[df['tdate'] == cob_date]
+        print(df.head())
+        return df
+
+    def load_rubber_phy_position_from_staging(self, cob_date: str) -> pd.DataFrame:
+        df = self._load_filtered_rubber_positions(cob_date)
         return df
 
     @staticmethod

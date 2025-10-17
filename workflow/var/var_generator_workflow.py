@@ -1,4 +1,4 @@
-from workflow.var.var_calculation_utils import get_cotton_region_aggregates
+from workflow.var.var_calculation_utils import get_cotton_region_aggregates, get_rubber_region_aggregates
 from pnl_analyzer.pnl_analyzer import PnLAnalyzer
 from workflow.var.var_calculation_utils import build_position_index_df, calculate_var_for_units
 from utils.contract_utils import instrument_ref_dict
@@ -7,12 +7,16 @@ import pandas as pd
 import os
 
 
-def generate_var(combined_pos_df, long_pnl_df, cob_date, window) -> pd.DataFrame:
+def generate_var(product, combined_pos_df, long_pnl_df, cob_date, window) -> pd.DataFrame:
 
     # Step 1: Build analyzer
     pnl_analyzer = PnLAnalyzer(long_pnl_df, combined_pos_df)
     # Step 2: Build position index DataFrame
-    region_aggregate_map = get_cotton_region_aggregates(combined_pos_df['region'].unique())
+    if product == 'cotton':
+        region_aggregate_map = get_cotton_region_aggregates(combined_pos_df['region'].unique())
+    elif product == 'rubber':
+        region_aggregate_map = get_rubber_region_aggregates(combined_pos_df['region'].unique())
+
     var_data_df = build_position_index_df(pnl_analyzer, region_aggregate_map)
     # Step 3: Run VaR calculation
     var_data_df = calculate_var_for_units(
@@ -217,4 +221,16 @@ def build_cotton_price_var_report_exceptions(report_df: pd.DataFrame) -> pd.Data
     )
 
     return report_df
+
+def build_rubber_var_report_exceptions(report_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Apply rubber-specific overrides:
+    - Only show outright position, basis position and outright VaR
+    """
+
+    # Step 1: Only show outright position, basis position and outright VaR
+    report_df = report_df.copy()
+    report_df = report_df[['outright_pos', 'basis_pos', 'outright_95_var', 'outright_99_var']]
+    return report_df
+
 
