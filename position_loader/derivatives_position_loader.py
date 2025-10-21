@@ -351,21 +351,28 @@ class DerivativesPositionLoader(PositionLoader):
 
         return df
 
-    def load_opera_sensitivities(self, position_df: pd.DataFrame, sensitivity_type: str, product: str) -> pd.DataFrame:
+    def load_opera_sensitivities(self, position_df: pd.DataFrame, sensitivity_types: list[str], product: str) -> pd.DataFrame:
         """
-        Fetch and deduplicate OPERA sensitivities from the DB for the given positions.
+        Fetch and deduplicate OPERA sensitivities from the DB for the given positions,
+        loading multiple sensitivity columns at once.
+
+        Args:
+            position_df (pd.DataFrame): DataFrame containing positions with 'security_id' and 'cob_date'.
+            sensitivity_types (list[str]): List of sensitivity column names to load.
+            product (str): Product name.
 
         Returns:
-            pd.DataFrame: sensitivity_df with ['security_id', 'cob_date', sensitivity_type]
+            pd.DataFrame: sensitivity_df with columns ['security_id', 'cob_date', *sensitivity_types]
         """
         if position_df.empty:
             print("No positions available; skipping sensitivity load.")
             return pd.DataFrame()
 
         supported_types = ['settle_delta_1', 'settle_delta_2', 'settle_gamma_11', 'settle_gamma_12', 'settle_gamma_21',
-                           'settle_gamma2', 'settle_vega_1', 'settle_vega_2', 'settle_theta', 'settle_chi']
-        if sensitivity_type not in supported_types:
-            raise ValueError(f"Unsupported sensitivity_type '{sensitivity_type}'. Must be one of {supported_types}.")
+                           'settle_gamma_22', 'settle_vega_1', 'settle_vega_2', 'settle_theta', 'settle_chi']
+        for s_type in sensitivity_types:
+            if s_type not in supported_types:
+                raise ValueError(f"Unsupported sensitivity_type '{s_type}'. Must be one of {supported_types}.")
 
         if product not in product_map:
             raise ValueError(f"Unsupported product: {product}")
@@ -379,14 +386,14 @@ class DerivativesPositionLoader(PositionLoader):
         cob_dates_sql = ", ".join(f"'{d}'" for d in cob_dates)
         security_ids_sql = ", ".join(f"'{sid}'" for sid in security_ids)
         opera_product_sql = ", ".join(f"'{p}'" for p in opera_product)
+        sensitivities_sql = ", ".join(sensitivity_types)
 
         sens_query = f"""
-        SELECT security_id, cob_date, {sensitivity_type}
-        FROM staging.opera_security_settlement
-        WHERE cob_date IN ({cob_dates_sql})
-        AND security_id IN ({security_ids_sql})
-        AND {sensitivity_type} IS NOT NULL
-        AND opera_product IN ({opera_product_sql})
+            SELECT security_id, cob_date, {sensitivities_sql}
+            FROM staging.opera_security_settlement
+            WHERE cob_date IN ({cob_dates_sql})
+            AND security_id IN ({security_ids_sql})
+            AND opera_product IN ({opera_product_sql})
         """
         print(sens_query)
 
@@ -398,7 +405,7 @@ class DerivativesPositionLoader(PositionLoader):
             return pd.DataFrame()
 
         # Deduplicate
-        deduplicated_df = raw_df.groupby(['security_id', 'cob_date'], as_index=False)[sensitivity_type].first()
+        deduplicated_df = raw_df.groupby(['security_id', 'cob_date'], as_index=False)[sensitivity_types].first()
 
         # Debug: show what was removed
         raw_df['key'] = raw_df[['security_id', 'cob_date']].apply(tuple, axis=1)
@@ -408,25 +415,31 @@ class DerivativesPositionLoader(PositionLoader):
 
         if not removed_rows.empty:
             print(f"Removed {len(removed_rows)} duplicate rows:")
-            print(removed_rows[[sensitivity_type, 'security_id', 'cob_date']])
+            print(removed_rows[[sensitivity_types, 'security_id', 'cob_date']])
             print(f"Retained {len(retained_rows)} rows.")
 
         return deduplicated_df.drop(columns='key', errors='ignore')
 
     @staticmethod
     def assign_opera_sensitivities(position_df: pd.DataFrame, sensitivity_df: pd.DataFrame,
-                                   sensitivity_type: str) -> pd.DataFrame:
+                                   sensitivity_types: list[str]) -> pd.DataFrame:
         """
-        Merge deduplicated sensitivities onto the position DataFrame with validation.
+        Merge multiple sensitivities onto the position DataFrame with validation.
+
+        Args:
+            position_df (pd.DataFrame): Original positions DataFrame.
+            sensitivity_df (pd.DataFrame): DataFrame containing sensitivities.
+            sensitivity_types (list[str]): List of sensitivity columns to merge.
 
         Returns:
-            pd.DataFrame: positions with sensitivity column added
+            pd.DataFrame: positions DataFrame with sensitivity columns added.
         """
         original_count = len(position_df)
 
         if sensitivity_df.empty:
-            print(f"No sensitivity data ({sensitivity_type}) found for the positions.")
-            position_df[sensitivity_type] = None
+            print(f"No sensitivity data ({sensitivity_types}) found for the positions.")
+            for s_type in sensitivity_types:
+                position_df[s_type] = None
             return position_df
 
         merged_df = position_df.merge(sensitivity_df, on=['security_id', 'cob_date'], how='left')
@@ -435,16 +448,16 @@ class DerivativesPositionLoader(PositionLoader):
         if len(merged_df) > original_count:
             dupes = merged_df.duplicated(subset=['security_id', 'cob_date'], keep=False)
             print("Merge increased row count — possible Cartesian product!")
-            print(merged_df[dupes][['security_id', 'cob_date', sensitivity_type]])
+            print(merged_df[dupes][['security_id', 'cob_date', sensitivity_types]])
             raise ValueError("Merge caused row duplication. Check for 1:N merge.")
 
         # Check for missing sensitivities
-        missing = merged_df[merged_df[sensitivity_type].isna()]
-        if not missing.empty:
-            print(f"{len(missing)} positions missing {sensitivity_type}:")
-
-            print(missing[['security_id', 'cob_date', 'portfolio', 'trader_id']])
+        missing = merged_df[sensitivity_types].isna().all(axis=1)
+        if missing.any():
+            missing_rows = merged_df[missing]
+            print(f"{len(missing_rows)} positions missing all of {sensitivity_types}:")
+            print(missing_rows[['security_id', 'cob_date', 'portfolio', 'trader_id']])
         else:
-            print(f"All positions successfully mapped to '{sensitivity_type}'.")
+            print(f"All positions successfully mapped to sensitivities: {sensitivity_types}")
 
         return merged_df

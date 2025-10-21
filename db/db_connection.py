@@ -1,5 +1,5 @@
 from sqlalchemy import create_engine
-from config import UAT_DB_PARAMS, PROD_DB_PARAMS
+from config import UAT_DB_PARAMS, PROD_DB_PARAMS, DZRMS_DB_PARAMS
 from urllib.parse import quote_plus
 
 
@@ -7,6 +7,7 @@ def get_engine(db):
     params_map = {
         'uat': UAT_DB_PARAMS,
         'prod': PROD_DB_PARAMS,
+        'dzrms': DZRMS_DB_PARAMS
     }
 
     if db not in params_map:

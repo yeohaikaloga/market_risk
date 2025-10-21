@@ -1,4 +1,7 @@
-from workflow.shared.data_preparation_workflow import prepare_returns_and_positions_data, prepare_pos_data_for_var
+from workflow.shared.data_preparation_workflow import (prepare_returns_and_positions_data, prepare_pos_data_for_var,
+                                                       load_raw_cotton_deriv_position, load_raw_rubber_deriv_position,
+                                                       load_raw_rms_deriv_position,
+                                                       generate_instrument_list_for_generic_curve)
 from workflow.shared.pnl_calculator_workflow import generate_pnl_vectors, analyze_and_export_unit_pnl
 from workflow.var.var_generator_workflow import (generate_var, build_var_report, build_cotton_var_report_exceptions,
                                                  build_cotton_price_var_report_exceptions,
@@ -14,24 +17,35 @@ def main_var_workflow(cob_date: str, product: str, method: str, window: int, wit
 
     filename = f"{cob_date}_{product[:3]}_{method}_var_report.xlsx"
 
+    if product == 'cotton':
+        deriv_pos_df = load_raw_cotton_deriv_position(cob_date)
+    elif product == 'rubber':
+        deriv_pos_df = load_raw_rubber_deriv_position(cob_date)
+    elif product == 'rms':
+        deriv_pos_df = load_raw_rms_deriv_position(cob_date)
+    bbg_product_code_list = generate_instrument_list_for_generic_curve(product, deriv_pos_df)
+
     # #=== STEP 1 and 2: Prepare Data ===
     instrument_dict, combined_pos_df = prepare_returns_and_positions_data(
         product=product,
+        product_code_list=bbg_product_code_list,
         cob_date=cob_date,
         window=window
     )
     combined_pos_df = prepare_pos_data_for_var(
         combined_pos_df=combined_pos_df,
         method=method)
+    print('Main positions done')
 
     if with_price_var:
-        combined_price_pos_df = combined_pos_df[combined_pos_df['books'] == 'PRICE']
+        combined_price_pos_df = combined_pos_df[combined_pos_df['book'] == 'PRICE']
+        print('Price positions done')
     print("[INFO] Step 1 and 2: Data preparation completed.")
-    #
-    # f = open('instrument_dict.pkl', 'wb')
-    # pickle.dump(instrument_dict, f)
-    # f.close()
-    # combined_pos_df.to_pickle('combined_pos_df.pkl')
+
+    f = open('instrument_dict.pkl', 'wb')
+    pickle.dump(instrument_dict, f)
+    f.close()
+    combined_pos_df.to_pickle('combined_pos_df.pkl')
     # combined_price_pos_df.to_pickle('combined_price_pos_df.pkl')
     # f = open('instrument_dict.pkl', 'rb')
     # instrument_dict = pickle.load(f)
@@ -40,20 +54,20 @@ def main_var_workflow(cob_date: str, product: str, method: str, window: int, wit
     # combined_price_pos_df = pd.read_pickle('combined_price_pos_df.pkl')
 
     # === STEP 3: Generate PnL Vectors ===
-    if method == 'linear' or method == 'non-linear (monte carlo)':
+    if method == 'linear' or method == 'non-linear_monte_carlo':
         long_pnl_df = generate_pnl_vectors(
             combined_pos_df=combined_pos_df,
             instrument_dict=instrument_dict,
             method=method
         )
-        print('shape: ', str(combined_pos_df.shape))
+        print('Main PnL shape: ', str(combined_pos_df.shape))
         if with_price_var:
             long_price_pnl_df = generate_pnl_vectors(
                 combined_pos_df=combined_price_pos_df,
                 instrument_dict=instrument_dict,
                 method=method
             )
-            print('shape: ', str(combined_price_pos_df.shape))
+            print('Price PnL shape: ', str(combined_price_pos_df.shape))
 
         print("[INFO] Step 3: PnL vectors generated.")
     else:

@@ -41,6 +41,8 @@ def generate_pnl_vectors(
         - cob_date
         - method
     """
+    if len(combined_pos_df) == 0:
+        raise ValueError("No positions to generate PnL vectors.")
 
     # Add position_index if not exists
     if 'position_index' not in combined_pos_df.columns:
@@ -113,8 +115,6 @@ def generate_pnl_vectors(
                 print(instrument_name)
                 returns_series = instrument_dict['PHYS'][instrument_name]['relative_returns_$']
                 print(exposure, position_index, instrument_name, returns_series.tail())
-                returns_series = returns_series # / 87.5275
-                print(exposure, instrument_name, returns_series.tail())
 
             # Calculate PnL
             pnl_series = delta * returns_series * to_usd
@@ -126,6 +126,7 @@ def generate_pnl_vectors(
             if product == 'cotton':
                 if method == 'linear':
                     returns_series = instrument_dict['BASIS']['abs_returns_$_df'][linear_var_map]
+                    print(exposure, position_index, instrument_name, linear_var_map, returns_series.tail())
                 elif method == 'non-linear (monte carlo)':
                     if monte_carlo_risk_factor == 'CT1':
                         returns_series = instrument_dict['CT']['relative_returns_$_df'][monte_carlo_risk_factor]
@@ -136,8 +137,11 @@ def generate_pnl_vectors(
                 sample_instrument = next(iter(instrument_dict.keys()))
                 ref_df = instrument_dict[sample_instrument]['relative_returns_$_df']
                 returns_series = pd.Series(np.zeros(len(ref_df)), index=ref_df.index)
+
+            # Calculate PnL
             pnl_series = delta * returns_series * to_usd
             df = pnl_series.to_frame(name='lookback_pnl')
+
         else:
             print(exposure, position_index, '[WARNING] Exposure is not Outright or Basis (Net Phys)')
 
@@ -149,15 +153,17 @@ def generate_pnl_vectors(
         df['method'] = method
         df['pnl_date'] = df.index
 
-        pnl_dfs.append(df)
+        if not df.empty:
+            pnl_dfs.append(df)
+            print(f"Appending PnL df for index {idx}, shape: {df.shape}")
+        else:
+            print(f"Empty PnL df at index {idx}")
 
-    if not pnl_dfs:
+    if pnl_dfs:
+        long_pnl_df = pd.concat(pnl_dfs, ignore_index=True)
+    else:
         raise ValueError("No PnL vectors generated.")
-
-    long_pnl_df = pd.concat(pnl_dfs, ignore_index=True)
     return long_pnl_df
-
-
 
 def analyze_and_export_unit_pnl(
     long_pnl_df: pd.DataFrame,

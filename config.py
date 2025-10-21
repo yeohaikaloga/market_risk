@@ -14,3 +14,4 @@ def load_db_params(section):
 
 UAT_DB_PARAMS = load_db_params('uat')
 PROD_DB_PARAMS = load_db_params('prod')
+DZRMS_DB_PARAMS = load_db_params('dzrms')
