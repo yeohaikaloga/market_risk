@@ -18,9 +18,15 @@ def get_engine(db):
     user_enc = quote_plus(params['user'])
     password_enc = quote_plus(params['password'])
 
-    db_url = (
-        f"postgresql://{user_enc}:{password_enc}@"
-        f"{params['host']}:{params['port']}/{params['database']}"
-    )
+    if db == 'dzrms':
+        # MySQL
+        dialect_driver = "mysql+pymysql"
+    else:
+        # PostgreSQL
+        dialect_driver = "postgresql+psycopg2"
+
+    driver = 'mysql+pymysql' if db == 'dzrms' else 'postgresql'
+    db_url = f"{driver}://{user_enc}:{password_enc}@{params['host']}:{params['port']}/{params['database']}"
+    print(f"Connecting to: {db_url}")
 
     return create_engine(db_url)

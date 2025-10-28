@@ -100,7 +100,8 @@ class DerivativesPositionLoader(PositionLoader):
             FROM position_opera.position pos
             {' '.join(joins)}
             WHERE {' AND '.join(where_conditions)}
-            AND derivative_type in ('future', 'vanilla_call', 'vanilla_put')
+            AND derivative_type NOT IN ('avg_cc_swap', 'fx_forward_df', 'fx_forward_ndf', 'fx_vanilla_call', 
+            'fx_vanilla_put')
             GROUP BY {', '.join(group_by_cols)}
         """
 
