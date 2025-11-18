@@ -16,8 +16,6 @@ class DerivativesPositionLoader(PositionLoader):
     def load_position(self, date, product, trader_id=None, counterparty_id=None, region=None,
                       book=None) -> pd.DataFrame:
 
-        # Add more products as needed
-
         if product not in product_map:
             raise ValueError(f"Unsupported product: {product}")
 
@@ -40,13 +38,13 @@ class DerivativesPositionLoader(PositionLoader):
                  "JOIN position_opera.security sec ON pos.risk_security_id = sec.id"]
 
         where_conditions = [f"pos.opera_product IN {opera_products_sql}", f"pos.cob_date = {date_sql}",
-                            "sp.subportfolio != 'CONSO-CT'",
-                            "CAST(pos.tdate AS DATE) BETWEEN CAST(pos.cob_date AS DATE) AND CAST(pos.cob_date AS DATE) "
-                            "+ INTERVAL '1 day'"]  # <-- tdate-cob_date filter as Fri/Sat/Sun tdate maps to Fri cob_date
+                            "sp.subportfolio != 'CONSO-CT'"]
+                            #"CAST(pos.tdate AS DATE) BETWEEN CAST(pos.cob_date AS DATE) AND CAST(pos.cob_date AS DATE) "
+                            #"+ INTERVAL '1 day'"]  # <-- tdate-cob_date filter as Fri/Sat/Sun tdate maps to Fri cob_date
 
         # Cotton-specific joins and filters
         if product == 'cotton':
-            joins.append("JOIN staging.portfolio_region_mapping_table_ex prmte ON prmte.unit_sd = sp.subportfolio")
+            joins.append("LEFT JOIN staging.portfolio_region_mapping_table_ex prmte ON prmte.unit_sd = sp.subportfolio")
 
             select_cols = ["pos.cob_date", "sec.security_id", "sp.subportfolio", "pf.portfolio", "sec.strike",
                            "sec.derivative_type", "sec.product_code", "sec.contract_month", "sec.currency",
@@ -54,7 +52,7 @@ class DerivativesPositionLoader(PositionLoader):
             group_by_cols = select_cols.copy()
 
             where_conditions.append("""
-                prmte.updated_timestamp = (SELECT MAX(updated_timestamp) FROM staging.portfolio_region_mapping_table_ex)
+                prmte.load_date = (SELECT MAX(load_date) FROM staging.portfolio_region_mapping_table_ex)
             """)
 
             excluded_book = ['ADMIN', 'NON OIL', 'POOL']
@@ -104,10 +102,17 @@ class DerivativesPositionLoader(PositionLoader):
             'fx_vanilla_put')
             GROUP BY {', '.join(group_by_cols)}
         """
-
+        # , 'None') for derivative_type
         print(query)  # Debug
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn)
+
+        if product == 'cotton':
+            unmapped = df[df['region'].isna() | df['books'].isna()]
+            if not unmapped.empty:
+                unmapped_ports = unmapped['portfolio'].unique().tolist()
+                print(
+                    f"[WARNING]: The following portfolios are not mapped in portfolio_region_mapping_table_ex: {unmapped_ports}")
 
         return df
 
@@ -182,9 +187,21 @@ class DerivativesPositionLoader(PositionLoader):
     @staticmethod
     def map_bbg_tickers(security_id: str) -> tuple[str | None, str | None]:
         """
-        Returns both Bloomberg-style option ticker and underlying ticker.
-        Returns: (option_ticker, underlying_ticker)
+        Maps internal security_id to Bloomberg-style option and underlying tickers.
+        Handles:
+          - Futures (e.g. "CM CT Z25")
+          - Vanilla options (e.g. "CM CT Z25.Z25C 67")
+          - Inter-month options (e.g. "CM CT Z25.H26C 67")
+          - Dated options (e.g. "CM CT 20251103.H25C 63.95")
+          - Exotic ADOC/ADOP/ADIC/ADIP/AUOC/AUOP/AUIC/AUIP
+          - OTC monthly-style European options like:
+            "CM OR F26.F26 20251201 20251231 EUR"
+
+        Returns:
+            (option_ticker, underlying_ticker)
         """
+        import re
+
         if not isinstance(security_id, str):
             return None, None
 
@@ -195,39 +212,76 @@ class DerivativesPositionLoader(PositionLoader):
         core = security_id[3:].strip()
 
         try:
-            # Handle options
-            if '.' in core:
-                pattern = r'^(\w+)\s+([A-Z])(\d{2})\.([A-Z])(\d{2})([CP])\s+(\d+)$'
-                m = re.match(pattern, core)
-                if not m:
-                    return None, None
-
-                asset_raw, opt_month, opt_year, und_month, und_year, opt_type, strike = m.groups()
+            # ============================================================
+            # 0️⃣ NEW: Handle OTC structured options like:
+            #    OR F26.F26 20251201 20251231 EUR
+            # ============================================================
+            # Format:
+            # <ASSET> <OPT_EXP>.<UND_EXP> <START> <END> <CCY>
+            m = re.match(
+                r'^(\w+)\s+([A-Z]\d{2})\.([A-Z]\d{2})\s+\d{8}\s+\d{8}\s+[A-Z]{3}$',
+                core
+            )
+            if m:
+                asset_raw, opt_exp, und_exp = m.groups()
                 asset = asset_raw + ' ' if len(asset_raw) == 1 else asset_raw
-
-                option_ticker = f"{asset}{opt_month}{opt_year[1]}{opt_type} {strike} Comdty"
+                und_month = und_exp[0]
+                und_year = und_exp[1:]  # e.g., "26"
                 underlying_ticker = f"{asset}{und_month}{und_year[1]} Comdty"
+                # Option ticker is NOT constructible from this format → return None
+                return None, underlying_ticker
 
-                return option_ticker, underlying_ticker
+            # ============================================================
+            # 1️⃣ Handle exotic ADOC/ADOP/ADIC/ADIP etc.
+            # ============================================================
+            if any(tag in core for tag in ("ADOC", "ADOP", "ADIC", "ADIP", "AUOC", "AUOP", "AUIC", "AUIP")):
+                m = re.search(r'(\w+)\s+\d{8}\.([A-Z])(\d{2})', core)
+                if m:
+                    asset_raw, und_month, und_year = m.groups()
+                    asset = asset_raw + ' ' if len(asset_raw) == 1 else asset_raw
+                    underlying_ticker = f"{asset}{und_month}{und_year[1]} Comdty"
+                    return None, underlying_ticker
+                return None, None
 
-            # Handle futures
-            else:
-                parts = re.split(r'\s+', core)
-                if len(parts) != 2:
-                    return None, None
+            # ============================================================
+            # 2️⃣ Handle dated or regular options
+            # ============================================================
+            if '.' in core:
+                # Dated option pattern
+                pattern = r'^(\w+)\s+(?:\d{8}\.)?([A-Z])(\d{2})([CP])\s+([\d.]+)$'
+                m = re.match(pattern, core)
+                if m:
+                    asset_raw, und_month, und_year, opt_type, strike = m.groups()
+                    asset = asset_raw + ' ' if len(asset_raw) == 1 else asset_raw
+                    option_ticker = f"{asset}{und_month}{und_year[1]}{opt_type} {strike} Comdty"
+                    underlying_ticker = f"{asset}{und_month}{und_year[1]} Comdty"
+                    return option_ticker, underlying_ticker
 
-                asset_raw, expiry = parts
+                # Regular or inter-month (CT Z25.H26C 67)
+                pattern2 = r'^(\w+)\s+([A-Z])(\d{2})\.([A-Z])(\d{2})([CP])\s+([\d.]+)$'
+                m = re.match(pattern2, core)
+                if m:
+                    asset_raw, opt_month, opt_year, und_month, und_year, opt_type, strike = m.groups()
+                    asset = asset_raw + ' ' if len(asset_raw) == 1 else asset_raw
+                    option_ticker = f"{asset}{opt_month}{opt_year[1]}{opt_type} {strike} Comdty"
+                    underlying_ticker = f"{asset}{und_month}{und_year[1]} Comdty"
+                    return option_ticker, underlying_ticker
+
+            # ============================================================
+            # 3️⃣ Handle futures
+            # ============================================================
+            parts = re.split(r'\s+', core)
+            if len(parts) >= 2:
+                asset_raw, expiry = parts[0], parts[1]
                 asset = asset_raw + ' ' if len(asset_raw) == 1 else asset_raw
-
                 m = re.match(r'^([A-Z])(\d{2})$', expiry)
-                if not m:
-                    return None, None
+                if m:
+                    month_code, year_code = m.groups()
+                    fut_ticker = f"{asset}{month_code}{year_code[1]} Comdty"
+                    return fut_ticker, fut_ticker
 
-                month_code, year_code = m.groups()
-                fut_ticker = f"{asset}{month_code}{year_code[1]} Comdty"
+            return None, None
 
-                # For futures, both option and underlying ticker are the same
-                return fut_ticker, fut_ticker
         except Exception:
             return None, None
 
@@ -245,7 +299,6 @@ class DerivativesPositionLoader(PositionLoader):
                 print(f"All security_ids successfully mapped to '{col}'.")
         return df
 
-    #TODO Add fallback assignment here. necessary for rubber.
     @staticmethod
     def map_generic_curve_with_fallback(contract, contract_to_curve_map):
         """
@@ -276,6 +329,10 @@ class DerivativesPositionLoader(PositionLoader):
         instrument = row['product_code'].replace('CM ', '').replace('IM ','')
         if len(instrument) == 1:
             instrument = instrument + ' '
+        # TODO Temporary placeholder - need to fix the actual mapping, particular for RMS.
+        if pd.isna(row.get('underlying_bbg_ticker')) or row.get('underlying_bbg_ticker') is None:
+            print(f"[SKIP] No underlying_bbg_ticker for {row.get('security_id', 'unknown')} — skipping mapping.")
+            return None
         contract = row['underlying_bbg_ticker'].replace(' Comdty', '')
         instrument_info = instrument_dict.get(instrument)
         if not instrument_info or not isinstance(instrument_info, dict):
@@ -457,7 +514,7 @@ class DerivativesPositionLoader(PositionLoader):
         if missing.any():
             missing_rows = merged_df[missing]
             print(f"{len(missing_rows)} positions missing all of {sensitivity_types}:")
-            print(missing_rows[['security_id', 'cob_date', 'portfolio', 'trader_id']])
+            print(missing_rows[['security_id', 'cob_date', 'portfolio']])
         else:
             print(f"All positions successfully mapped to sensitivities: {sensitivity_types}")
 

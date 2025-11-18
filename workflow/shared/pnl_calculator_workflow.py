@@ -25,7 +25,7 @@ def generate_pnl_vectors(
     Generate daily PnL vectors for each position.
 
     For linear method:
-        PnL = delta * $returns * to_USD_conversion
+        PnL = delta * $returns * to_USD_conversion ### BROUGHT BACKWARDS TO THE DATA PREP STAGE
 
     Args:
         combined_pos_df: Must have: position_index, delta, instrument_name, generic_curve, to_USD_conversion
@@ -52,10 +52,16 @@ def generate_pnl_vectors(
                 combined_pos_df.index.map(lambda i: str(i).zfill(4))
         )
     pnl_dfs = []
+    print(combined_pos_df['generic_curve'].unique())
+    missing_generic_curve_idx = combined_pos_df[combined_pos_df['generic_curve'].isna()].index
+    if len(missing_generic_curve_idx) > 0:
+        print("[WARNING] The following position indices have generic_curve = None:")
+        print(missing_generic_curve_idx.tolist())
+    else:
+        print("[INFO] All rows have a valid generic_curve.")
 
     for idx, row in combined_pos_df.iterrows():
         instrument_name = row['instrument_name']
-        #generic_curve = row['generic_curve']
         #basis_series = row['basis_series']
         if method == 'linear':
             linear_var_map = row['linear_var_map']
@@ -63,12 +69,16 @@ def generate_pnl_vectors(
             monte_carlo_risk_factor = row['monte_carlo_var_risk_factor']
         position_index = row.get('position_index', f"error")
         delta = row['delta']
-        exposure = row['exposure']
         to_usd = row['to_USD_conversion']
+        if method == 'taylor_series':
+            gamma = row['gamma']
+            vega = row['vega']
+            theta = row['theta']
+        exposure = row['exposure']
         product = row['product']
+        generic_curve = row['generic_curve']
         df = pd.DataFrame(columns=['lookback_pnl'])
         print(idx, position_index, delta, exposure)
-
         if exposure == 'OUTRIGHT':
             print('outright')
             if instrument_name in instrument_dict.keys():
@@ -83,14 +93,14 @@ def generate_pnl_vectors(
                     returns_series = returns_series / 7.1675
                     print(exposure, instrument_name, returns_series.tail())
 
-                elif instrument_name == 'CCL':
+                elif (instrument_name == 'CCL') or (instrument_name == 'AVY'):
                     if method == 'linear':
                         returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][linear_var_map]
                         print(exposure, position_index, instrument_name, linear_var_map, returns_series.tail())
                     elif method == 'non-linear (monte carlo)':
                         returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][monte_carlo_risk_factor]
 
-                    returns_series = returns_series / 87.5275
+                    returns_series = returns_series / 88.6625
                     print(exposure, instrument_name, returns_series.tail())
 
                 elif instrument_name == 'JN':
@@ -110,15 +120,26 @@ def generate_pnl_vectors(
                         returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][linear_var_map]
                     elif method == 'non-linear (monte carlo)':
                         returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][monte_carlo_risk_factor]
+                    elif method == 'taylor_series':
+                        returns_series = instrument_dict[instrument_name]['relative_returns_$_df'][generic_curve]
+                        vol_change_series = instrument_dict[instrument_name]['vol_change_df'][generic_curve]
+                        pass
 
             else:
                 print(instrument_name)
-                returns_series = instrument_dict['PHYS'][instrument_name]['relative_returns_$']
+                returns_series = instrument_dict['PHYS'][instrument_name]['relative_returns_df']['relative_returns_USD/Candy']
                 print(exposure, position_index, instrument_name, returns_series.tail())
 
             # Calculate PnL
-            pnl_series = delta * returns_series * to_usd
-            df = pnl_series.to_frame(name='lookback_pnl')
+            if method == 'linear':
+                pnl_series = delta * returns_series * to_usd
+                df = pnl_series.to_frame(name='lookback_pnl')
+                df['inverse_pnl'] = -df['lookback_pnl']
+            elif method == 'taylor_series':
+                pnl_series = delta * returns_series + gamma * (returns_series ** 2) + vega * vol_change_series + theta
+                inv_pnl_series = delta * -returns_series + gamma * (returns_series ** 2) + vega * vol_change_series + theta
+                df = pnl_series.to_frame(name='lookback_pnl')
+                df['inverse_pnl'] = inv_pnl_series
             print(df.head(1))
 
         elif exposure == 'BASIS (NET PHYS)':
@@ -141,13 +162,12 @@ def generate_pnl_vectors(
             # Calculate PnL
             pnl_series = delta * returns_series * to_usd
             df = pnl_series.to_frame(name='lookback_pnl')
+            df['inverse_pnl'] = -df['lookback_pnl']
 
         else:
             print(exposure, position_index, '[WARNING] Exposure is not Outright or Basis (Net Phys)')
 
         # Build DataFrame for this position
-
-        df['inverse_pnl'] = -df['lookback_pnl']
         df['position_index'] = position_index
         df['cob_date'] = row.get('cob_date', None)
         df['method'] = method
@@ -166,6 +186,7 @@ def generate_pnl_vectors(
     return long_pnl_df
 
 def analyze_and_export_unit_pnl(
+    product: str,
     long_pnl_df: pd.DataFrame,
     combined_pos_df: pd.DataFrame,
     position_index_list: list,
@@ -192,10 +213,12 @@ def analyze_and_export_unit_pnl(
             mode = 'w'
             if_sheet_exists = None
         with pd.ExcelWriter(filename, mode=mode, if_sheet_exists=if_sheet_exists) as writer:
+            #TODO: If rows > 16000, then transpose.
             combined_pos_df.to_excel(writer, sheet_name='pos', index=True)
-            unit_outright_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='outright_lookback', index=True)
-            unit_outright_inverse.sort_index(ascending=False).to_excel(writer, sheet_name='outright_inverse', index=True)
-            unit_basis_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='basis_lookback', index=True)
-            #unit_basis_inverse.sort_index(ascending=False).to_excel(writer, sheet_name='basis_inverse', index=True)
+            if product != 'rms':
+                unit_outright_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='outright_lookback', index=True)
+                unit_outright_inverse.sort_index(ascending=False).to_excel(writer, sheet_name='outright_inverse', index=True)
+                unit_basis_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='basis_lookback', index=True)
+                #unit_basis_inverse.sort_index(ascending=False).to_excel(writer, sheet_name='basis_inverse', index=True)
 
     print(f"Export for unit pnl vectors completed: f'{filename}'")

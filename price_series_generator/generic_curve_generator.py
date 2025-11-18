@@ -22,6 +22,7 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             self._contract_expiry_dates = expiry
             self._contract_roll_dates = roll
 
+    # TODO: Add USD/native currency flag option
     def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = 'none') -> pd.DataFrame:
         """
         Generate the N-th generic futures curve with optional early rolling and backward adjustment.

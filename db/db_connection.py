@@ -1,13 +1,12 @@
 from sqlalchemy import create_engine
-from config import UAT_DB_PARAMS, PROD_DB_PARAMS, DZRMS_DB_PARAMS
+from config import UAT_DB_PARAMS, PROD_DB_PARAMS, RMS_DB_PARAMS
 from urllib.parse import quote_plus
-
 
 def get_engine(db):
     params_map = {
-        'uat': UAT_DB_PARAMS,
-        'prod': PROD_DB_PARAMS,
-        'dzrms': DZRMS_DB_PARAMS
+        'uat': {**UAT_DB_PARAMS, 'dialect': 'postgresql+psycopg2'},
+        'prod': {**PROD_DB_PARAMS, 'dialect': 'postgresql+psycopg2'},
+        'rms': {**RMS_DB_PARAMS, 'dialect': 'mysql+pymysql'}
     }
 
     if db not in params_map:
@@ -18,15 +17,21 @@ def get_engine(db):
     user_enc = quote_plus(params['user'])
     password_enc = quote_plus(params['password'])
 
-    if db == 'dzrms':
-        # MySQL
-        dialect_driver = "mysql+pymysql"
-    else:
-        # PostgreSQL
-        dialect_driver = "postgresql+psycopg2"
+    db_url = f"{params['dialect']}://{user_enc}:{password_enc}@{params['host']}:{params['port']}/{params['database']}"
 
-    driver = 'mysql+pymysql' if db == 'dzrms' else 'postgresql'
-    db_url = f"{driver}://{user_enc}:{password_enc}@{params['host']}:{params['port']}/{params['database']}"
-    print(f"Connecting to: {db_url}")
+    connect_args = {}
+    if db == 'rms':
+        # Optional: If you run into plugin/auth issues, uncomment this:
+        connect_args = {
+            "ssl": {
+                "ssl_ca": "/path/to/ca.pem",
+                "ssl_cert": "/path/to/client-cert.pem",
+                "ssl_key": "/path/to/client-key.pem"
+            }
+        }
+
+        # Optional SSL args:
+        # connect_args = {"ssl": {"ssl_ca": "/path/to/ca.pem"}}
+        return create_engine(db_url, connect_args=connect_args)
 
     return create_engine(db_url)

@@ -10,6 +10,14 @@ def relative_returns(prices: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Seri
     if not isinstance(prices, (pd.Series, pd.DataFrame)):
         raise TypeError("Input must be a pandas Series or DataFrame.")
 
+    if not isinstance(prices.index, pd.DatetimeIndex):
+        try:
+            prices = prices.copy()
+            prices.index = pd.to_datetime(prices.index)
+        except Exception:
+            raise TypeError("Index must be datetime-like or convertible to datetime.")
+    prices = prices.sort_index()
+
     # Replace zero prices with NaN to avoid divide-by-zero
     prices = prices.replace(0, np.nan)
 

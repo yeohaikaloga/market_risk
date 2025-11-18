@@ -23,13 +23,16 @@ from contract_ref_loader.derivatives_contract_ref_loader import DerivativesContr
 from contract_ref_loader.physical_contract_ref_loader import PhysicalContractRefLoader
 from price_series_loader.derivatives_price_loader import DerivativesPriceLoader
 from price_series_loader.physical_price_loader import PhysicalPriceLoader
+from price_series_loader.vol_series_loader import VolLoader
 from price_series_generator.generic_curve_generator import GenericCurveGenerator
+
 from utils.date_utils import get_prev_biz_days_list
 from db.db_connection import get_engine
 from position_loader.derivatives_position_loader import DerivativesPositionLoader
 from position_loader.physical_position_loader import PhysicalPositionLoader
 from position_loader.position_loader import PositionLoader
-from utils.contract_utils import extract_instrument_name, instrument_ref_dict, month_codes
+from utils.contract_utils import (load_instrument_ref_dict, month_codes, extract_instrument_from_product_code,
+                                  get_USD_MT_conversion_from_product_code, obtain_product_code_from_instrument_name)
 from financial_calculations.returns import relative_returns
 from position_loader.physical_position_loader import fy24_unit_to_cotlook_basis_origin_dict
 
@@ -53,13 +56,12 @@ def load_raw_cotton_deriv_position(cob_date: str) -> pd.DataFrame:
         product=product,
         book=None
     )
-
+    deriv_pos_df = deriv_pos_df[~deriv_pos_df['security_id'].astype(str).str.startswith('CR')]
     return deriv_pos_df
 
 def load_raw_rubber_deriv_position(cob_date: str) -> pd.DataFrame:
     uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
     product = 'rubber'
-
     # Step 2G: Load and process derivatives positions
     derivatives_loader = DerivativesPositionLoader(date=cob_date, source=uat_engine)
     deriv_pos_df = derivatives_loader.load_position(
@@ -69,7 +71,7 @@ def load_raw_rubber_deriv_position(cob_date: str) -> pd.DataFrame:
         product=product,
         book=None
     )
-
+    deriv_pos_df = deriv_pos_df[~deriv_pos_df['security_id'].astype(str).str.startswith('CR')]
     return deriv_pos_df
 
 def load_raw_rms_deriv_position(cob_date: str) -> pd.DataFrame:
@@ -80,22 +82,19 @@ def load_raw_rms_deriv_position(cob_date: str) -> pd.DataFrame:
     derivatives_loader = DerivativesPositionLoader(date=cob_date, source=uat_engine)
     deriv_pos_df = derivatives_loader.load_position(
         date=cob_date,
-        trader_id='all',
-        counterparty_id='all',
+        trader_id=None,
+        counterparty_id=None,
         product=product,
         book=None
     )
-
+    deriv_pos_df = deriv_pos_df[~deriv_pos_df['security_id'].astype(str).str.startswith('CR')]
+    deriv_pos_df['region'] = deriv_pos_df['portfolio']
     return deriv_pos_df
 
-def generate_instrument_list_for_generic_curve(product: str, df: pd.DataFrame) -> list:
+def generate_product_code_list_for_generic_curve(product: str, df: pd.DataFrame) -> list:
     if product == 'cotton':
         product_code_list = (
             df['product_code']
-            .astype(str)
-            .str.replace('CM ', '', regex=False)
-            .str.replace('IM ', '', regex=False)
-            .apply(lambda x: x + ' ' if len(x.strip()) == 1 else x.strip())  # add space if only one character
             .unique()
             .tolist()
         )
@@ -104,57 +103,40 @@ def generate_instrument_list_for_generic_curve(product: str, df: pd.DataFrame) -
         product_code_list = (
             df['security_id']
             .astype(str)
-            .str.replace('CM ', '', regex=False)
-            .str.replace('IM ', '', regex=False)
-            .str.split()        # ✅ use .str.split() for vectorized operation
-            .str[0]             # take the first token
-            .apply(lambda x: x + ' ' if len(x.strip()) == 1 else x.strip())  # pad if 1-char
+            .str.extract(r'(\S+\s+\S+)')[0]  # first two space-separated tokens
             .unique()
             .tolist()
         )
-
     else:
         raise ValueError(f"Unsupported product: {product}")
 
     return product_code_list
 
-def test():
-    dzrms_engine = get_engine('dzrms')
-    # days_list = get_prev_biz_days_list(cob_date, window + 1)
+def generate_instrument_vol_change_dict(instrument_list: list, cob_date: str, window: int) -> Dict[str, Any]:
+    rms_engine = get_engine('rms')
+    days_list = get_prev_biz_days_list(cob_date, window + 1)
 
-    instrument_dict = {}
+    instrument_vol_dict = {}
 
-    # Load price change table
-    sql_query4 = f"""
-                SELECT price_change 
-                FROM var_cont_price_change_table_view
-                """
-                #WHERE cont_month = '{InData.at[iRecord, 'future_continuation_series']}'
-                #AND settlement_date <= '{formatted_SettleDate}'
-                #ORDER BY settlement_date DESC
-                #LIMIT {NumDays}
-            #"""
-    print(sql_query4)
+    for instrument_name in instrument_list:
+        vol_change_loader = VolLoader(
+            instrument_name=instrument_name,
+            source=rms_engine
+        )
+        vol_change_df = vol_change_loader.load_vol_change_for_generic_curve(
+            start_date=days_list[0],
+            end_date=cob_date,
+            max_generic_curve=9,
+            reindex_dates=None,
+            instrument_name=instrument_name
+        )
 
-    with dzrms_engine.connect() as conn:
-        price_change_df = pd.read_sql_query(text(sql_query4), conn)
-    # Load sigma change table
-    sql_query5 = f"""
-                    SELECT vol_change 
-                    FROM var_cont_vol_change_table_view
-                """
-                    #WHERE cont_month = '{InData.at[iRecord, 'option_continuation_series']}'
-                    #AND settlement_date <= '{formatted_SettleDate}'
-                    #ORDER BY settlement_date DESC
-                    #LIMIT {NumDays}
-                #"""
-    print(sql_query5)
-    with dzrms_engine.connect() as conn:
-        sigma_change_df = pd.read_sql_query(text(sql_query5), conn)
+        instrument_vol_dict[instrument_name] = vol_change_df
 
-    pass
+    return instrument_vol_dict
 
-def generate_product_generic_curves(product_code_list: list, cob_date: str, window: int) -> Dict[str, Any]:
+
+def generate_instrument_generic_curves_dict(instrument_list: list, cob_date: str, window: int) -> Dict[str, Any]:
     """
     STEP 1: Generate generic futures curves and returns for all relevant instruments.
 
@@ -176,8 +158,9 @@ def generate_product_generic_curves(product_code_list: list, cob_date: str, wind
     days_list = get_prev_biz_days_list(cob_date, window + 1)
 
     instrument_dict = {}
+    instrument_ref_dict = load_instrument_ref_dict('uat')
 
-    for instrument_name in product_code_list:
+    for instrument_name in instrument_list:
         # Step 1A: Load contract metadata
         derivatives_contract = DerivativesContractRefLoader(
             instrument_name=instrument_name,
@@ -234,8 +217,11 @@ def generate_product_generic_curves(product_code_list: list, cob_date: str, wind
         relative_returns_df = relative_returns_df.fillna(0)
         relative_returns_dollarised_df = relative_returns_df * generic_curves_df.loc[cob_date]
 
+
+        product_code = obtain_product_code_from_instrument_name(instrument_name, instrument_ref_dict)
         # TODO: Temporary FOREX if-else clause. Need proper fix HERE.
-        if instrument_ref_dict[instrument_name].get('currency', 'USD') == 'CNY':
+        currency = instrument_ref_dict.get(product_code, {}).get('currency', 'USD')
+        if currency == 'CNY':
             relative_returns_dollarised_df = relative_returns_dollarised_df / 1
 
         # Create contract-to-curve mapping
@@ -258,7 +244,7 @@ def generate_product_generic_curves(product_code_list: list, cob_date: str, wind
 
     return instrument_dict
 
-def generate_ex_gin_s6_returns_df(cob_date: str, window: int) -> pd.DataFrame:
+def generate_ex_gin_s6_returns_df(cob_date: str, window: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     uat_engine = get_engine('uat')
     days_list = get_prev_biz_days_list(cob_date, window + 1)
     ex_gin_s6 = PhysicalPriceLoader(instrument_name='EX GIN S6', source=uat_engine)
@@ -268,11 +254,11 @@ def generate_ex_gin_s6_returns_df(cob_date: str, window: int) -> pd.DataFrame:
     ex_gin_s6_relative_returns_df = relative_returns(ex_gin_s6_df)
     print(ex_gin_s6_df.tail())
     print(ex_gin_s6_df.loc[cob_date])
-    # Rs/Candy to Rs/MT conversion factor : 1000 / 355.56
-    ex_gin_s6_relative_returns_df['relative_returns_INR'] = (ex_gin_s6_relative_returns_df['price'] * ex_gin_s6_df.loc[cob_date, 'price'])
-    ex_gin_s6_relative_returns_df['relative_returns_$'] = ex_gin_s6_relative_returns_df['relative_returns_INR']
+    # Rs/Candy to Rs/MT conversion factor : 1000 / 355.56 = 2.8124648 (OPERA: 2.810304); same with CCL contract
+    ex_gin_s6_relative_returns_df['relative_returns_INR/Candy'] = (ex_gin_s6_relative_returns_df['price'] * ex_gin_s6_df.loc[cob_date, 'price'])
     # TODO: Insert FOREX conversion here (USDINR hardcoded as 87.5275)
-    return ex_gin_s6_relative_returns_df
+    ex_gin_s6_relative_returns_df['relative_returns_USD/Candy'] = ex_gin_s6_relative_returns_df['relative_returns_INR/Candy'] / 88.6625 # Candy to MT conversion happening at position / pnl side.
+    return ex_gin_s6_df, ex_gin_s6_relative_returns_df
 
 def generate_cotlook_returns_df(cob_date: str, window: int) -> dict:
     prod_engine = get_engine('prod')
@@ -334,13 +320,33 @@ def prepare_returns_and_positions_data(product, product_code_list: list, cob_dat
     """
     print(f"[INFO] Starting data preparation for {product} on {cob_date} with {window}-day window.")
 
-    # Step 1A: Generate market data
+    #Step 1A: Generate market data
+    instrument_ref_dict = load_instrument_ref_dict('uat')
+    instrument_list = []
+    for product_code in product_code_list:
+        instrument = instrument_ref_dict[product_code]['bbg_product_code']
+        if len(instrument) == 1:
+            instrument = instrument + ' '
+        instrument_list.append(instrument)
+
     if product != 'rms':
-        instrument_dict = generate_product_generic_curves(product_code_list, cob_date, window)
+        instrument_dict = generate_instrument_generic_curves_dict(instrument_list, cob_date, window)
+        pass
+    elif product == 'rms':
+        instrument_dict = generate_instrument_generic_curves_dict(instrument_list, cob_date, window)
+        instrument_vol_dict = generate_instrument_vol_change_dict(instrument_list, cob_date, window)
+        for instrument in instrument_dict.keys():
+            instrument_dict[instrument]['vol_change_df'] = instrument_vol_dict[instrument]
+        pass
 
     if product == 'cotton':
         instrument_dict['PHYS'] = {}
-        instrument_dict['PHYS']['EX GIN S6'] = generate_ex_gin_s6_returns_df(cob_date, window)
+        instrument_dict['PHYS']['EX GIN S6'] = {
+            'price_series': None,
+            'relative_returns_df': None
+        }
+        instrument_dict['PHYS']['EX GIN S6']['price_series'], instrument_dict['PHYS']['EX GIN S6']['relative_returns_df'] \
+            = generate_ex_gin_s6_returns_df(cob_date, window)
         instrument_dict['PHYS']['COTLOOK'] = generate_cotlook_returns_df(cob_date, window)
         print("[INFO] Step 1A: Market data generation completed.")
 
@@ -357,28 +363,26 @@ def prepare_returns_and_positions_data(product, product_code_list: list, cob_dat
         instrument_dict['BASIS']['abs_returns_$_df'] = basis_abs_ret_df
         print("[INFO] Step 1B: Basis returns generation completed.")
 
-    if product == 'rms':
-        instrument_dict = {}
+        #TODO for RMS, use generic curves from Risk DB (instead of OPERA view table) when forex is ready.
 
-        pass
-    #TODO use generic curves from Risk DB (instead of OPERA view table) when forex is ready.
-
-    # f = open('instrument_dict.pkl', 'wb')
-    # pickle.dump(instrument_dict, f)
-    # f.close()
+    f = open('instrument_dict.pkl', 'wb')
+    pickle.dump(instrument_dict, f)
+    f.close()
 
     f = open('instrument_dict.pkl', 'rb')
     instrument_dict = pickle.load(f)
     f.close()
 
-    # Step 1C: Generate position data
+    # Step 2: Generate position data
     if product == 'cotton':
         combined_pos_df = generate_cotton_combined_position(cob_date, instrument_dict)
-        print("[INFO] Step 1C: Position data generation completed.")
+        print("[INFO] Step 2 [cotton]: Position data generation completed.")
     elif product == 'rubber':
         combined_pos_df = generate_rubber_combined_position(cob_date, instrument_dict)
+        print("[INFO] Step 2 [rubber]: Position data generation completed.")
     elif product == 'rms':
         combined_pos_df = generate_rms_combined_position(cob_date, instrument_dict)
+        print("[INFO] Step 2 [rms]: Position data generation completed.")
     else:
         raise NotImplementedError(f"Product '{product}' not yet supported in data preparation workflow.")
 
@@ -404,12 +408,13 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     """
     uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
     product = 'cotton'
+    instrument_ref_dict = load_instrument_ref_dict('uat')
 
     # Step 2A: Load physical positions from staging
     physical_loader = PhysicalPositionLoader(date=cob_date, source=uat_engine)
     conso_pos_df = physical_loader.load_cotton_phy_position_from_staging(cob_date=cob_date)
     conso_pos_df.columns = [col.lower() for col in conso_pos_df.columns]
-    print('Step 2A [cotton] completed')
+    print('[DATA PREP] Step 2A [cotton] completed')
 
     # Step 2B: Classify position types
     pos_type_conditions = [
@@ -419,7 +424,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     ]
     pos_type_values = ['FIXED PHYS', 'DIFF PHYS', 'DERIVS']
     conso_pos_df['position_type'] = np.select(pos_type_conditions, pos_type_values, default='UNKNOWN')
-    print('Step 2B [cotton] completed')
+    print('[DATA PREP] Step 2B [cotton] completed')
 
     # Step 2C: Temporary exposure for basis logic (to be replaced)
     exposure_conditions = [
@@ -429,7 +434,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     ]
     exposure_values = ['OUTRIGHT', 'BASIS', 'OUTRIGHT']
     conso_pos_df['exposure_for_old_basis'] = np.select(exposure_conditions, exposure_values, default='UNKNOWN')
-    print('Step 2C [cotton] completed')
+    print('[DATA PREP] Step 2C [cotton] completed')
 
     # Step 2D: Assign instrument based on unit and position
     conso_pos_df['contract'] = '-'
@@ -440,30 +445,30 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
         # China adjustment: Fixed outright → VV; India adjustment: Fixed outright → S6
         if position_type == 'FIXED PHYS' and exposure == 'OUTRIGHT':
             if unit == 'CHINA':
-                conso_pos_df.loc[idx, 'contract'] = 'VV'
+                conso_pos_df.loc[idx, 'product_code'] = 'CM VV'
             elif unit == 'INDIA':
-                conso_pos_df.loc[idx, 'contract'] = 'EX GIN S6'
+                conso_pos_df.loc[idx, 'product_code'] = 'EX GIN S6'
             else:
-                conso_pos_df.loc[idx, 'contract'] = 'CT'
+                conso_pos_df.loc[idx, 'product_code'] = 'CM CT'
         else:
-            conso_pos_df.loc[idx, 'contract'] = 'CT'
-    print('Step 2D [cotton] completed')
+            conso_pos_df.loc[idx, 'product_code'] = 'CM CT'
+    print('[DATA PREP] Step 2D [cotton] completed')
 
-    # Step 2E: Calculate aggregates by region/contract
-    phys_derivs_aggs = conso_pos_df.groupby(['region', 'contract']).apply(calculate_phys_derivs_aggs).reset_index()
+    # Step 2E: Calculate aggregates by region/product_code
+    phys_derivs_aggs = conso_pos_df.groupby(['region', 'product_code']).apply(calculate_phys_derivs_aggs).reset_index()
     phys_derivs_aggs['outright_pos'] = phys_derivs_aggs['net_fixed_phys'] + phys_derivs_aggs['derivs']
     phys_derivs_aggs[['basis_adj', 'basis_pos']] = phys_derivs_aggs.apply(
         lambda row: pd.Series(calculate_basis_adj_and_basis_pos(row)),
         axis=1
     )
-    print('Step 2E [cotton] completed')
+    print('[DATA PREP] Step 2E [cotton] completed')
 
     # Step 2F: Prepare physical positions for combination
     phy_pos_df = conso_pos_df[conso_pos_df['position_type'] != 'DERIVS'].copy()
-    phy_pos_df = phy_pos_df.rename(columns={'contract': 'instrument_name', 'quantity': 'delta'})
+    phy_pos_df = phy_pos_df.rename(columns={'quantity': 'delta'})
 
     phy_grouped_pos_df = phy_pos_df.groupby([
-        'region', 'typ', 'position_type', 'terminal_month', 'instrument_name'
+        'region', 'typ', 'position_type', 'terminal_month', 'product_code'
     ], as_index=False)['delta'].sum()
 
     phy_grouped_pos_df = phy_grouped_pos_df[phy_grouped_pos_df['delta'] != 0]
@@ -475,10 +480,10 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     phy_grouped_pos_df['counterparty_id'] = 0
     phy_grouped_pos_df['counterparty_parent'] = None
 
-    # Add FX conversion
-    phy_grouped_pos_df['to_USD_conversion'] = phy_grouped_pos_df['instrument_name'].map(
-        lambda x: instrument_ref_dict.get('CCL', {}).get('to_USD_conversion', np.nan)
-        if x == 'EX GIN S6' else instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
+    # Add conversion of physicals from c/lbs to USD/MT
+    phy_grouped_pos_df['to_USD_conversion'] = phy_grouped_pos_df.apply(
+        lambda row: get_USD_MT_conversion_from_product_code(row['product_code'], instrument_ref_dict),
+        axis=1
     )
 
     # Split into basis and outright exposures: All physicals positions are basis; all fixed physical positions are outright
@@ -502,21 +507,21 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
             # PHYSICAL LEG
             phys_leg = base_leg.copy()
             phys_leg.update({
-                'instrument_name': 'EX GIN S6',
+                'product_code': 'EX GIN S6',
                 'exposure': 'OUTRIGHT',
                 'position_type': 'DIFF PHYS',
                 'delta': row['delta'],
-                'to_USD_conversion': instrument_ref_dict['CCL']['to_USD_conversion']
+                'to_USD_conversion': instrument_ref_dict['CM CCL']['to_USD_conversion']
             })
 
             # DERIVATIVES LEG
             derivs_leg = base_leg.copy()
             derivs_leg.update({
-                'instrument_name': 'CT',
+                'product_code': 'CM CT',
                 'exposure': 'OUTRIGHT',
                 'position_type': 'DERIVS',
                 'delta': -row['delta'],  # negated
-                'to_USD_conversion': instrument_ref_dict['CT']['to_USD_conversion']
+                'to_USD_conversion': instrument_ref_dict['CM CCL']['to_USD_conversion']
             })
             both_india_legs_df = pd.DataFrame([phys_leg, derivs_leg])
             india_pos_df = pd.concat([india_pos_df, both_india_legs_df], ignore_index=True)
@@ -526,15 +531,29 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     basis_phy_pos_df = basis_phy_pos_df[basis_phy_pos_df['region'] != 'INDIA']
 
     # Assign Bloomberg tickers and generic curves
+    outright_phy_pos_df['instrument_name'] = (
+        outright_phy_pos_df['product_code']
+        .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
+    )
+
+    outright_phy_pos_df['lots_to_MT_conversion'] = 1
     outright_phy_pos_df = physical_loader.assign_bbg_tickers(outright_phy_pos_df, instrument_dict)
     outright_phy_pos_df = physical_loader.assign_generic_curves(outright_phy_pos_df, instrument_dict)
+
+
+    basis_phy_pos_df['instrument_name'] = (
+        basis_phy_pos_df['product_code']
+        .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
+    )
+
+    basis_phy_pos_df['lots_to_MT_conversion'] = 1
     basis_phy_pos_df = physical_loader.assign_bbg_tickers(basis_phy_pos_df, instrument_dict) # for MC VaR
     basis_phy_pos_df = physical_loader.assign_generic_curves(basis_phy_pos_df, instrument_dict) # for MC VaR
     basis_phy_pos_df = physical_loader.assign_basis_series(basis_phy_pos_df, fy24_unit_to_cotlook_basis_origin_dict)
 
     # Create unit-region mapping for derivatives
     cotton_unit_region_mapping = dict(zip(conso_pos_df['unit'], conso_pos_df['region']))
-    print('Step 2F [cotton] completed')
+    print('[DATA PREP] Step 2F [cotton] completed')
 
     # Step 2G: Load and process derivatives positions
     derivatives_loader = DerivativesPositionLoader(date=cob_date, source=uat_engine)
@@ -545,6 +564,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
         product=product,
         book=None
     )
+    deriv_pos_df = deriv_pos_df[~deriv_pos_df['security_id'].astype(str).str.startswith('CR')]
 
     # Attach sensitivities
     sensitivity_df = derivatives_loader.load_opera_sensitivities(
@@ -559,32 +579,37 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     )
 
     # Clean and map
-    deriv_pos_df = derivatives_loader.assign_bbg_tickers(deriv_pos_df)
-    deriv_pos_df = deriv_pos_df[deriv_pos_df['total_active_lots'] != 0]
-    deriv_pos_df = derivatives_loader.assign_generic_curves(deriv_pos_df, instrument_dict)
-    deriv_pos_df['instrument_name'] = deriv_pos_df['product_code'].apply(extract_instrument_name)
-    deriv_pos_df = derivatives_loader.assign_cotton_unit(deriv_pos_df)
-    deriv_pos_df['region'] = deriv_pos_df['unit'].map(cotton_unit_region_mapping)
-    deriv_pos_df['position_type'] = 'DERIVS'
-    deriv_pos_df['exposure'] = 'OUTRIGHT'
-    deriv_pos_df = deriv_pos_df.rename(columns={'books': 'book'})
+    if len(deriv_pos_df) != 0:
+        deriv_pos_df = derivatives_loader.assign_bbg_tickers(deriv_pos_df)
+        deriv_pos_df = deriv_pos_df[deriv_pos_df['total_active_lots'] != 0]
+        deriv_pos_df['instrument_name'] = (
+            deriv_pos_df['product_code']
+            .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
+        )
+        deriv_pos_df = derivatives_loader.assign_generic_curves(deriv_pos_df, instrument_dict)
+        deriv_pos_df['product_code'] = deriv_pos_df['security_id'].str.split().str[:2].str.join(' ')
+        deriv_pos_df = derivatives_loader.assign_cotton_unit(deriv_pos_df)
+        deriv_pos_df['region'] = deriv_pos_df['unit'].map(cotton_unit_region_mapping)
+        deriv_pos_df['position_type'] = 'DERIVS'
+        deriv_pos_df['exposure'] = 'OUTRIGHT'
+        deriv_pos_df = deriv_pos_df.rename(columns={'books': 'book'})
 
-    # Add conversions
-    deriv_pos_df['to_USD_conversion'] = deriv_pos_df['instrument_name'].map(
-        lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
-    )
-    deriv_pos_df['lots_to_MT_conversion'] = deriv_pos_df['instrument_name'].map(
-        lambda x: instrument_ref_dict.get(x, {}).get('lots_to_MT_conversion', np.nan)
-    )
-    deriv_pos_df['conversion_factor'] = (
-        deriv_pos_df['to_USD_conversion'] * deriv_pos_df['lots_to_MT_conversion']
-    )
-    deriv_pos_df['delta'] = (
-        deriv_pos_df['total_active_lots'] *
-        deriv_pos_df['settle_delta_1'] *
-        deriv_pos_df['lots_to_MT_conversion']
-    )
-    print('Step 2G [cotton] completed')
+        # Add conversions
+        deriv_pos_df['to_USD_conversion'] = deriv_pos_df['product_code'].map(
+            lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
+        )
+        deriv_pos_df['lots_to_MT_conversion'] = deriv_pos_df['product_code'].map(
+            lambda x: instrument_ref_dict.get(x, {}).get('lots_to_MT_conversion', np.nan)
+        )
+        deriv_pos_df['conversion_factor'] = (
+            deriv_pos_df['to_USD_conversion'] * deriv_pos_df['lots_to_MT_conversion']
+        )
+        deriv_pos_df['delta'] = (
+            deriv_pos_df['total_active_lots'] *
+            deriv_pos_df['settle_delta_1'] *
+            deriv_pos_df['lots_to_MT_conversion']
+        )
+    print('[DATA PREP] Step 2G [cotton] completed')
 
     # Step 2H: Combine all positions
     combined_pos_df = pd.concat(
@@ -612,6 +637,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
 def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, Any]) -> pd.DataFrame:
     uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
     product = 'rubber'
+    instrument_ref_dict = load_instrument_ref_dict('uat')
 
     # Step 2A: Load physical positions from staging
     physical_loader = PhysicalPositionLoader(date=cob_date, source=uat_engine)
@@ -665,14 +691,14 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
             return delta_quantity
     conso_pos_df['quantity'] = conso_pos_df.apply(lambda row: adjusted_delta(row['product_type'], row['quantity']), axis=1)
 
-    def rubber_portfolio_instrument_mapping(portfolio):
+    def rubber_portfolio_product_code_mapping(portfolio):
         if portfolio == 'CHINA TRAD' or portfolio == 'CHINATRAD2' or portfolio == 'CHINA':
-            return 'RT'
+            return 'IM RT'
         else:
-            return 'OR'
-    conso_pos_df['instrument_name'] = conso_pos_df.apply(
-        lambda row: rubber_portfolio_instrument_mapping(row['portfolio']), axis=1)
-    print('Step 2A [rubber] completed')
+            return 'CM OR'
+    conso_pos_df['product_code'] = conso_pos_df.apply(
+        lambda row: rubber_portfolio_product_code_mapping(row['portfolio']), axis=1)
+    print('[DATA PREP] Step 2A [rubber] completed')
 
     # Step 2B: Classify position types
     pos_type_conditions = [
@@ -682,7 +708,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     ]
     pos_type_values = ['FIXED PHYS', 'DIFF PHYS', 'DERIVS']
     conso_pos_df['position_type'] = np.select(pos_type_conditions, pos_type_values, default='UNKNOWN')
-    print('Step 2B [rubber] completed')
+    print('[DATA PREP] Step 2B [rubber] completed')
 
     # Step 2C: Temporary exposure for basis logic (to be replaced)
     exposure_conditions = [
@@ -692,7 +718,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     ]
     exposure_values = ['OUTRIGHT', 'BASIS', 'OUTRIGHT']
     conso_pos_df['exposure_for_old_basis'] = np.select(exposure_conditions, exposure_values, default='UNKNOWN')
-    print('Step 2C [rubber] completed')
+    print('[DATA PREP] Step 2C [rubber] completed')
 
     # Step 2D: Calculate aggregates by unit/contract
     phys_derivs_aggs = conso_pos_df.groupby(['region', 'terminal_month']).apply(calculate_phys_derivs_aggs).reset_index()
@@ -701,26 +727,20 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
         lambda row: pd.Series(calculate_basis_adj_and_basis_pos(row)),
         axis=1
     )
-    print('Step 2D [rubber] completed')
+    print('[DATA PREP] Step 2D [rubber] completed')
 
     # Step 2E: Prepare physical positions for combination
     phy_pos_df = conso_pos_df[conso_pos_df['position_type'] != 'DERIVS'].copy()
     phy_pos_df = phy_pos_df.rename(columns={'quantity': 'delta'})
 
     phy_grouped_pos_df = phy_pos_df.groupby([
-        'unit', 'region', 'typ', 'position_type', 'terminal_month', 'instrument_name', 'counterparty_parent',
+        'unit', 'region', 'typ', 'position_type', 'terminal_month', 'product_code', 'counterparty_parent',
         'trader_name', 'product_type', 'source'
     ], as_index=False)['delta'].sum()
 
     phy_grouped_pos_df = phy_grouped_pos_df[phy_grouped_pos_df['delta'] != 0]
     phy_grouped_pos_df['subportfolio'] = phy_grouped_pos_df['typ']
     phy_grouped_pos_df['strike'] = np.nan
-
-    # Add FX conversion
-    phy_grouped_pos_df['to_USD_conversion'] = phy_grouped_pos_df['instrument_name'].map(
-        lambda x: instrument_ref_dict.get('CCL', {}).get('to_USD_conversion', np.nan)
-        if x == 'EX GIN S6' else instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
-    )
 
     # Split into basis and outright exposures: All physicals positions are basis; all fixed physical positions are outright
     basis_phy_pos_df = phy_grouped_pos_df.copy()
@@ -736,7 +756,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     outright_phy_pos_df['terminal_month'] = pd.to_datetime(outright_phy_pos_df['terminal_month'], errors='coerce')
     outright_phy_pos_df['bbg_ticker'] = outright_phy_pos_df.apply(
         lambda row: (
-                row['instrument_name']
+                row['product_code']
                 + [k for k, v in month_codes.items() if v == row['terminal_month'].month][0]
                 + str(row['terminal_month'].year)[-1]
                 + " Comdty"
@@ -744,34 +764,47 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
         axis=1
     )
     outright_phy_pos_df['underlying_bbg_ticker'] = outright_phy_pos_df['bbg_ticker']
+    outright_phy_pos_df['instrument_name'] = (
+        outright_phy_pos_df['product_code']
+        .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
+    )
     outright_phy_pos_df = physical_loader.assign_generic_curves(outright_phy_pos_df, instrument_dict)
-
-    #basis_phy_pos_df = physical_loader.assign_bbg_tickers(basis_phy_pos_df, instrument_dict)  # for MC VaR
+    outright_phy_pos_df['to_USD_conversion'] = outright_phy_pos_df['product_code'].map(
+        lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
+    )
+    basis_phy_pos_df['instrument_name'] = (
+        basis_phy_pos_df['product_code']
+        .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
+    )
+    #basis_phy_pos_df = physical_loader.assign_bbg_tickers(basis_phy_pos_df, instrument_ref_dict)  # for MC VaR
     basis_phy_pos_df['terminal_month'] = pd.to_datetime(basis_phy_pos_df['terminal_month'], errors='coerce')
     basis_phy_pos_df['bbg_ticker'] = basis_phy_pos_df.apply(
         lambda row: (
-                row['instrument_name']
+                row['product_code']
                 + [k for k, v in month_codes.items() if v == row['terminal_month'].month][0]
                 + str(row['terminal_month'].year)[-1]
                 + " Comdty"
         ),
         axis=1
     )
+    basis_phy_pos_df['to_USD_conversion'] = basis_phy_pos_df['product_code'].map(
+        lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
+    )
     basis_phy_pos_df['underlying_bbg_ticker'] = basis_phy_pos_df['bbg_ticker']
     basis_phy_pos_df = physical_loader.assign_generic_curves(basis_phy_pos_df, instrument_dict)  # for MC VaR
 
-    # Create unit-region mapping for derivatives
-    print('Step 2E [rubber] completed')
+    print('[DATA PREP] Step 2E [rubber] completed')
 
     # Step 2F: Load and process derivatives positions
     derivatives_loader = DerivativesPositionLoader(date=cob_date, source=uat_engine)
     deriv_pos_df = derivatives_loader.load_position(
         date=cob_date,
-        trader_id='all',
-        counterparty_id='all',
+        trader_id=None,
+        counterparty_id=None,
         product=product,
         book=None
     )
+    deriv_pos_df = deriv_pos_df[~deriv_pos_df['security_id'].astype(str).str.startswith('CR')]
 
     # Attach sensitivities
     sensitivity_df = derivatives_loader.load_opera_sensitivities(
@@ -786,32 +819,37 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     )
 
     # Clean and map
-    deriv_pos_df['product_code'] = deriv_pos_df['security_id'].str.split().str[1]
-    deriv_pos_df = derivatives_loader.assign_bbg_tickers(deriv_pos_df)
-    deriv_pos_df = deriv_pos_df[deriv_pos_df['total_active_lots'] != 0]
-    deriv_pos_df = derivatives_loader.assign_generic_curves(deriv_pos_df, instrument_dict)
-    deriv_pos_df['instrument_name'] = deriv_pos_df['product_code']
-    deriv_pos_df['position_type'] = 'DERIVS'
-    deriv_pos_df['exposure'] = 'OUTRIGHT'
-    deriv_pos_df['unit'] = deriv_pos_df['portfolio']
-    deriv_pos_df['region'] = deriv_pos_df['unit'].map(rubber_unit_region_mapping)
+    if len(deriv_pos_df) != 0:
+        deriv_pos_df['product_code'] = deriv_pos_df['security_id'].str.split().str[:2].str.join(' ')
+        deriv_pos_df = derivatives_loader.assign_bbg_tickers(deriv_pos_df)
+        deriv_pos_df = deriv_pos_df[deriv_pos_df['total_active_lots'] != 0]
+        deriv_pos_df['instrument_name'] = (
+            deriv_pos_df['product_code']
+            .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
+        )
+        deriv_pos_df = derivatives_loader.assign_generic_curves(deriv_pos_df, instrument_dict)
+        #deriv_pos_df['instrument_name'] = deriv_pos_df['product_code'].apply(extract_instrument_from_product_code)
+        deriv_pos_df['position_type'] = 'DERIVS'
+        deriv_pos_df['exposure'] = 'OUTRIGHT'
+        deriv_pos_df['unit'] = deriv_pos_df['portfolio']
+        deriv_pos_df['region'] = deriv_pos_df['unit'].map(rubber_unit_region_mapping)
 
-    # Add conversions
-    deriv_pos_df['to_USD_conversion'] = deriv_pos_df['instrument_name'].map(
-        lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
+        # Add conversions
+        deriv_pos_df['to_USD_conversion'] = deriv_pos_df['product_code'].map(
+            lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
+        )
+        deriv_pos_df['lots_to_MT_conversion'] = deriv_pos_df['product_code'].map(
+            lambda x: instrument_ref_dict.get(x, {}).get('lots_to_MT_conversion', np.nan)
+        )
+        deriv_pos_df['conversion_factor'] = (
+                deriv_pos_df['to_USD_conversion'] * deriv_pos_df['lots_to_MT_conversion']
+        )
+        deriv_pos_df['delta'] = (
+                deriv_pos_df['total_active_lots'] *
+                deriv_pos_df['settle_delta_1'] *
+                deriv_pos_df['lots_to_MT_conversion']
     )
-    deriv_pos_df['lots_to_MT_conversion'] = deriv_pos_df['instrument_name'].map(
-        lambda x: instrument_ref_dict.get(x, {}).get('lots_to_MT_conversion', np.nan)
-    )
-    deriv_pos_df['conversion_factor'] = (
-            deriv_pos_df['to_USD_conversion'] * deriv_pos_df['lots_to_MT_conversion']
-    )
-    deriv_pos_df['delta'] = (
-            deriv_pos_df['total_active_lots'] *
-            deriv_pos_df['settle_delta_1'] *
-            deriv_pos_df['lots_to_MT_conversion']
-    )
-    print('Step 2F [rubber] completed')
+    print('[DATA PREP] Step 2F [rubber] completed')
 
     # Step 2G: Combine all positions
     combined_pos_df = pd.concat(
@@ -831,7 +869,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
             combined_pos_df.index.map(lambda i: str(i).zfill(4))
     )
 
-    print('Step 2G [rubber] completed')
+    print('[DATA PREP] Step 2G [rubber] completed')
     print(f"[INFO] Combined [rubber] position DataFrame generated. Shape: {combined_pos_df.shape}")
     print(combined_pos_df.head())
 
@@ -840,16 +878,18 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
 def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any]) -> pd.DataFrame:
     uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
     product = 'rms'
+    instrument_ref_dict = load_instrument_ref_dict('uat')
 
     # Step 2F: Load and process derivatives positions
     derivatives_loader = DerivativesPositionLoader(date=cob_date, source=uat_engine)
     deriv_pos_df = derivatives_loader.load_position(
         date=cob_date,
-        trader_id='all',
-        counterparty_id='all',
+        trader_id=None,
+        counterparty_id=None,
         product=product,
         book=None
     )
+    deriv_pos_df = deriv_pos_df[~deriv_pos_df['security_id'].astype(str).str.startswith('CR')]
 
     # Attach sensitivities
     all_sensitivity_types = [
@@ -877,32 +917,49 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
     )
 
     # Clean and map
-    deriv_pos_df['product_code'] = deriv_pos_df['security_id'].str.split().str[1]
-    #deriv_pos_df = derivatives_loader.assign_bbg_tickers(deriv_pos_df)
-    deriv_pos_df = deriv_pos_df[deriv_pos_df['total_active_lots'] != 0]
-    #deriv_pos_df = derivatives_loader.assign_generic_curves(deriv_pos_df, instrument_dict)
-    deriv_pos_df['instrument_name'] = deriv_pos_df['product_code']
-    deriv_pos_df['position_type'] = 'DERIVS'
-    deriv_pos_df['exposure'] = 'OUTRIGHT'
-    deriv_pos_df['unit'] = deriv_pos_df['portfolio']
-    #deriv_pos_df['region'] = deriv_pos_df['unit'].map(rubber_unit_region_mapping)
+    if len(deriv_pos_df) != 0:
+        deriv_pos_df['product_code'] = deriv_pos_df['security_id'].str.split().str[:2].str.join(' ')
+        deriv_pos_df = derivatives_loader.assign_bbg_tickers(deriv_pos_df)
+        deriv_pos_df = deriv_pos_df[deriv_pos_df['total_active_lots'] != 0]
+        deriv_pos_df = derivatives_loader.assign_generic_curves(deriv_pos_df, instrument_dict)
+        #deriv_pos_df['instrument_name'] = deriv_pos_df['product_code'].apply(extract_instrument_from_product_code)
+        #print(deriv_pos_df['instrument_name'].unique())
+        deriv_pos_df['position_type'] = 'DERIVS'
+        deriv_pos_df['exposure'] = 'OUTRIGHT'
+        deriv_pos_df['unit'] = deriv_pos_df['portfolio']
+        deriv_pos_df['region'] = deriv_pos_df['portfolio']
 
-    # Add conversions
-    deriv_pos_df['to_USD_conversion'] = deriv_pos_df['instrument_name'].map(
-        lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
-    )
-    deriv_pos_df['lots_to_MT_conversion'] = deriv_pos_df['instrument_name'].map(
-        lambda x: instrument_ref_dict.get(x, {}).get('lots_to_MT_conversion', np.nan)
-    )
-    deriv_pos_df['conversion_factor'] = (
-            deriv_pos_df['to_USD_conversion'] * deriv_pos_df['lots_to_MT_conversion']
-    )
-    deriv_pos_df['delta'] = (
-            deriv_pos_df['total_active_lots'] *
-            deriv_pos_df['settle_delta_1'] *
-            deriv_pos_df['lots_to_MT_conversion']
-    )
-    print('Step 2F [rms] completed')
+        # Add conversions
+        deriv_pos_df['to_USD_conversion'] = deriv_pos_df['product_code'].map(
+            lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
+        )
+        deriv_pos_df['lots_to_MT_conversion'] = deriv_pos_df['product_code'].map(
+            lambda x: instrument_ref_dict.get(x, {}).get('lots_to_MT_conversion', np.nan)
+        )
+        deriv_pos_df['conversion_factor'] = (
+                deriv_pos_df['to_USD_conversion'] * deriv_pos_df['lots_to_MT_conversion']
+        )
+        deriv_pos_df['delta'] = (
+                deriv_pos_df['total_active_lots'] *
+                (deriv_pos_df['settle_delta_1'] + deriv_pos_df['settle_delta_2']) *
+                deriv_pos_df['lots_to_MT_conversion'] *
+                deriv_pos_df['to_USD_conversion']
+        )
+        deriv_pos_df['gamma'] = (
+                deriv_pos_df['total_active_lots'] *
+                (deriv_pos_df['settle_gamma_11'] + deriv_pos_df['settle_gamma_12'] + deriv_pos_df['settle_gamma_21'] +
+                 deriv_pos_df['settle_gamma_22']) *
+                deriv_pos_df['to_USD_conversion'] ** 2
+        )
+        deriv_pos_df['vega'] = (
+                deriv_pos_df['total_active_lots'] *
+                (deriv_pos_df['settle_vega_1'] + deriv_pos_df['settle_vega_2'])
+        )
+        deriv_pos_df['theta'] = (
+                deriv_pos_df['total_active_lots'] *
+                deriv_pos_df['settle_theta'] * 5/7
+        )
+    print('[DATA PREP] Step 2F [rms] completed')
 
     # Step 2G: Combine all positions
     combined_pos_df = pd.concat(
@@ -922,26 +979,35 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
             combined_pos_df.index.map(lambda i: str(i).zfill(4))
     )
 
-    print('Step 2G [rms] completed')
+    print('[DATA PREP] Step 2G [rms] completed')
     print(f"[INFO] Combined [rms] position DataFrame generated. Shape: {combined_pos_df.shape}")
     print(combined_pos_df.head())
 
     return combined_pos_df
 
-def prepare_pos_data_for_var(combined_pos_df: pd.DataFrame, method: str) -> pd.DataFrame:
+def prepare_pos_data_for_var(combined_pos_df: pd.DataFrame, method: str, trader: bool, counterparty: bool) -> pd.DataFrame:
     # Step 2H: Prepare minimal position data needed for VaR calculator
     # Define minimal base columns upfront
 
     base_cols = [
-        'cob_date', 'product', 'unit', 'position_type', 'product_code',
-        'total_active_lots', 'settle_delta_1', 'exposure', 'trader_id', 'trader_name',
-        'counterparty_id', 'counterparty_parent', 'instrument_name', 'bbg_ticker',
-        'underlying_bbg_ticker', 'generic_curve', 'delta',
-        'to_USD_conversion', 'lots_to_MT_conversion', 'position_index'
+        'cob_date', 'product', 'unit', 'position_type',
+        'total_active_lots', 'settle_delta_1', 'exposure', 'product_code', 'instrument_name', 'bbg_ticker',
+        'underlying_bbg_ticker', 'generic_curve', 'delta', 'position_index',
+        'to_USD_conversion'
     ]
 
     uat_engine = get_engine('uat')
     pos_loader = PositionLoader(source=uat_engine)
+
+    if trader:
+        if 'trader_id' not in base_cols:
+            base_cols.append('trader_id')
+            base_cols.append('trader_name')
+
+    if counterparty:
+        if 'counterparty_id' not in base_cols:
+            base_cols.append('counterparty_id')
+            base_cols.append('counterparty_parent')
 
     if method == 'linear':
         combined_pos_df = pos_loader.assign_linear_var_map(combined_pos_df)
@@ -952,8 +1018,10 @@ def prepare_pos_data_for_var(combined_pos_df: pd.DataFrame, method: str) -> pd.D
         combined_pos_df = pos_loader.duplicate_basis_and_assign_ct1(combined_pos_df)
         base_cols.append('monte_carlo_var_risk_factor')
 
-    # Add cotton-specific columns if product contains 'cotton'
+    # Add cotton/rubber/rms-specific columns
     if (combined_pos_df['product'].str.lower() == 'cotton').any():
+        if 'portfolio' not in base_cols:
+            base_cols.append('portfolio')
         if 'region' not in base_cols:
             base_cols.append('region')
         if 'book' not in base_cols:
@@ -961,12 +1029,38 @@ def prepare_pos_data_for_var(combined_pos_df: pd.DataFrame, method: str) -> pd.D
         if 'basis_series' not in base_cols:
             base_cols.append('basis_series')
     elif (combined_pos_df['product'].str.lower() == 'rubber').any():
+        if 'portfolio' not in base_cols:
+            base_cols.append('portfolio')
         if 'product_type' not in base_cols:
             base_cols.append('product_type')
         if 'region' not in base_cols:
             base_cols.append('region')
         if 'source' not in base_cols:
             base_cols.append('source')
+    elif (combined_pos_df['product'].str.lower() == 'rms').any():
+        if 'region' not in base_cols:
+            base_cols.append('region')
+        if 'settle_gamma_11' not in base_cols:
+            base_cols.append('settle_gamma_11')
+        if 'settle_vega_1' not in base_cols:
+            base_cols.append('settle_vega_1')
+        if 'settle_theta' not in base_cols:
+            base_cols.append('settle_theta')
+        if 'gamma' not in base_cols:
+            base_cols.append('gamma')
+        if 'vega' not in base_cols:
+            base_cols.append('vega')
+        if 'theta' not in base_cols:
+            base_cols.append('theta')
+
+    # No derivatives position
+    if 'DERIVS' in combined_pos_df['position_type'].unique():
+        if 'product_code' not in base_cols:
+            base_cols.append('product_code')
+        if 'to_USD_conversion' not in base_cols:
+            base_cols.append('to_USD_conversion')
+        if 'lots_to_MT_conversion' not in base_cols:
+            base_cols.append('lots_to_MT_conversion')
 
     combined_pos_df = combined_pos_df[base_cols]
 
@@ -975,5 +1069,5 @@ def prepare_pos_data_for_var(combined_pos_df: pd.DataFrame, method: str) -> pd.D
         combined_pos_df['cob_date'].astype(str) + '_' +
         combined_pos_df.index.map(lambda i: str(i).zfill(4))
     )
-    print('Step 2H completed')
+    print('[DATA PREP] Step 2H completed')
     return combined_pos_df

@@ -78,9 +78,10 @@ class PhysicalPositionLoader(PositionLoader):
         return df
 
     def _load_filtered_rubber_positions(self, cob_date: str) -> pd.DataFrame:
+        #TODO to change the table name accordingly
         query = """
             SELECT * 
-            FROM staging.ors_positions_updated
+            FROM staging.ors_positions_updated_test
             """
         print(query)
         with self.source.connect() as conn:
@@ -89,7 +90,7 @@ class PhysicalPositionLoader(PositionLoader):
         # Apply consistent filters
         df['Delta Quantity'] = pd.to_numeric(df['Delta Quantity'], errors='coerce')
         df = df[df['Delta Quantity'] != 0.0]
-        cob_date = cob_date + ' 00:00:00'
+        #cob_date = cob_date + ' 00:00:00'
         df= df[df['tdate'] == cob_date]
         print(df.head())
         return df
@@ -99,13 +100,17 @@ class PhysicalPositionLoader(PositionLoader):
         return df
 
     @staticmethod
-    def map_bbg_tickers(instrument_name: str, terminal_month: datetime, instrument_ref_dict: dict) -> tuple[str | None, str | None]:
+    def map_bbg_tickers(instrument_name: str, terminal_month: datetime, instrument_dict: dict) -> tuple[str | None, str | None]:
         """
         Returns both Bloomberg-style option ticker and underlying ticker.
         Returns: (option_ticker, underlying_ticker)
         """
+
+        #if instrument_name == 'EX GIN S6':
+        #    instrument_name = 'CCL'
         try:
-            if (not isinstance(instrument_name, str) or instrument_name not in instrument_ref_dict.keys()
+
+            if (not isinstance(instrument_name, str) or instrument_name not in instrument_dict.keys()
                     or not isinstance(terminal_month, datetime)):
                 return None, None
 
@@ -129,7 +134,7 @@ class PhysicalPositionLoader(PositionLoader):
         for col in ['bbg_ticker', 'underlying_bbg_ticker']:
             invalid = df[df[col].isna()]
             if not invalid.empty:
-                print(f"Warning: Found {len(invalid)} invalid instrument_name or terminal_month for column '{col}':")
+                print(f"Warning: Found {len(invalid)} invalid product_code or terminal_month for column '{col}':")
                 print(invalid[['instrument_name', 'terminal_month']])
             else:
                 print(f"All instrument_name and terminal_month successfully mapped to '{col}'.")
@@ -162,8 +167,11 @@ class PhysicalPositionLoader(PositionLoader):
         instrument_name = str(row.get('instrument_name', '')).upper()
         instrument_info = instrument_dict.get(instrument_name)
         if not instrument_info or not isinstance(instrument_info, dict):
-            print(f"[WARN] Instrument '{instrument_name}' not found or invalid in instrument_dict.")
-            return None
+            if instrument_name:
+                return instrument_name
+            else:
+                print(f"[WARN] Instrument '{instrument_name}' not found or invalid in instrument_dict.")
+                return None
 
         curve_map = instrument_info.get('contract_to_curve_map', {})
 

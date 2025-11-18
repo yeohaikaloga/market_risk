@@ -1,6 +1,7 @@
-from workflow.var.var_calculation_utils import get_cotton_region_aggregates, get_rubber_region_aggregates
+from workflow.var.var_calculation_utils import (get_cotton_region_aggregates, get_rubber_region_aggregates,
+                                                get_rms_aggregates)
 from pnl_analyzer.pnl_analyzer import PnLAnalyzer
-from workflow.var.var_calculation_utils import build_position_index_df, calculate_var_for_units
+from workflow.var.var_calculation_utils import build_position_index_df, calculate_var_for_regions
 from utils.contract_utils import instrument_ref_dict
 
 import pandas as pd
@@ -16,10 +17,12 @@ def generate_var(product, combined_pos_df, long_pnl_df, cob_date, window) -> pd.
         region_aggregate_map = get_cotton_region_aggregates(combined_pos_df['region'].unique())
     elif product == 'rubber':
         region_aggregate_map = get_rubber_region_aggregates(combined_pos_df['region'].unique())
+    elif product == 'rms':
+        region_aggregate_map = get_rms_aggregates(combined_pos_df['region'].unique())
 
     var_data_df = build_position_index_df(pnl_analyzer, region_aggregate_map)
     # Step 3: Run VaR calculation
-    var_data_df = calculate_var_for_units(
+    var_data_df = calculate_var_for_regions(
         var_data_df=var_data_df,
         analyzer=pnl_analyzer,
         cob_date=cob_date,
@@ -165,7 +168,7 @@ def build_cotton_var_report_exceptions(long_pnl_df: pd.DataFrame,
 
     exception_cotton_var_data_df = pd.concat([exception_cotton_var_data_df, pd.DataFrame([sum_origin_ex_row, sum_cotton_ex_row])], ignore_index=True)
     pnl_analyzer = PnLAnalyzer(long_pnl_df, combined_pos_df)
-    exception_cotton_var_data_df = calculate_var_for_units(
+    exception_cotton_var_data_df = calculate_var_for_regions(
         var_data_df=exception_cotton_var_data_df,
         analyzer=pnl_analyzer,
         cob_date=cob_date,

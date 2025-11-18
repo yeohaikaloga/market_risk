@@ -1,8 +1,7 @@
 import pandas as pd
 from sqlalchemy import text
 from contract_ref_loader.contract_ref_loader import ContractRefLoader
-from utils.contract_utils import month_codes, instrument_ref_dict
-from utils.contract_utils import custom_monthly_contract_sort_key
+from utils.contract_utils import month_codes, custom_monthly_contract_sort_key, instrument_ref_dict
 
 
 class DerivativesContractRefLoader(ContractRefLoader):
@@ -47,7 +46,8 @@ class DerivativesContractRefLoader(ContractRefLoader):
         relevant_options = normalize_list(relevant_options)
         relevant_strikes = normalize_list(relevant_strikes)
 
-        futures_category = instrument_ref_dict.get(self.instrument_name, {}).get('futures_category')
+        # TODO: Fix hardcoded instrument_ref_dict to product_master_table (load function) in contract_utils.py
+        futures_category = instrument_ref_dict.get(self.instrument_name.strip(), {}).get('futures_category')
         if not futures_category:
             print(f"Instrument '{self.instrument_name}' not found in reference dictionary.")
             return pd.DataFrame()
@@ -57,6 +57,8 @@ class DerivativesContractRefLoader(ContractRefLoader):
                 raise ValueError("Options and strikes should be None when mode is 'futures'")
 
         month_letters = ''.join(month_codes.keys())
+        if len(self.instrument_name) == 1:
+            self.instrument_name = self.instrument_name + ' '
         regex_comb = f"^{self.instrument_name}[{month_letters}][0-9] COMB Comdty$"
         regex_non_comb = f"^{self.instrument_name}[{month_letters}][0-9] Comdty$"
 
@@ -84,7 +86,7 @@ class DerivativesContractRefLoader(ContractRefLoader):
                             last_tradeable_dt, opt_expire_dt
             FROM final
         """
-
+        print(query)
         # Conditional filters
         conditions = []
 

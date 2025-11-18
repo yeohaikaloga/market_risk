@@ -65,6 +65,13 @@ def get_rubber_region_aggregates(region_list: list[str]) -> dict[str, list[str]]
         'PROP TRADING': sum_prop_trading
     }
 
+def get_rms_aggregates(region_list: list[str]) -> dict[str, list[str]]:
+    sum_rms = region_list
+    return {
+        'SUM RMS': sum_rms
+    }
+
+
 def build_position_index_df(
     pnl_analyzer: PnLAnalyzer,
     region_aggregate_map: dict
@@ -115,7 +122,7 @@ def build_position_index_df(
             # NON-COTTON only for 'CENTRAL ' regions
             if region_analyzer:
                 non_cotton_analyzer = region_analyzer.filter(
-                    instrument_name=lambda c: c not in ['CT', 'VV', 'CCL']
+                    instrument_name=lambda c: c not in ['CT', 'VV', 'CCL', 'AVY']
                 )
                 pos_data = get_position_data(non_cotton_analyzer)
                 records.append({
@@ -156,7 +163,7 @@ def build_position_index_df(
         # COTTON only for aggregates
         if agg_analyzer:
             cotton_analyzer = agg_analyzer.filter(
-                instrument_name=lambda c: c in ['CT', 'VV', 'CCL', 'EX GIN S6']
+                instrument_name=lambda c: c in ['CT', 'VV', 'CCL', 'AVY', 'EX GIN S6']
             )
             print(f"pos_data: {pos_data}, type: {type(pos_data)}")
             pos_data = get_position_data(cotton_analyzer)
@@ -169,7 +176,7 @@ def build_position_index_df(
 
     return pd.DataFrame.from_records(records)
 
-def calculate_var_for_units(
+def calculate_var_for_regions(
     var_data_df: pd.DataFrame,
     analyzer: PnLAnalyzer,
     cob_date: str,
