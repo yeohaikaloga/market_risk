@@ -138,7 +138,7 @@ def generate_instrument_vol_change_dict(instrument_list: list, cob_date: str, wi
 
 
 def generate_instrument_generic_curves_dict(instrument_list: list, cob_date: str, window: int,
-                                            usd_conversion_mode: str, fx_df: pd.DataFrame) -> Dict[str, Any]:
+                                            usd_conversion_mode: str, fx_df: pd.DataFrame) -> (Dict[str, Any], pd.DataFrame, pd.DataFrame):
     """
     STEP 1: Generate generic futures curves and returns for all relevant instruments.
 

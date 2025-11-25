@@ -18,6 +18,10 @@ class DerivativesContractRefLoader(ContractRefLoader):
         from utils.contract_utils import load_instrument_ref_dict
         instrument_ref_dict = load_instrument_ref_dict('uat')
 
+        # Load holiday calendar
+        from utils.date_utils import load_opera_market_calendar
+        self.holiday_calendar = load_opera_market_calendar(instrument_name)
+
         # Find all keys with matching Bloomberg code
         matched_keys = [key for key, ref in instrument_ref_dict.items()
                         if ref.get("bbg_product_code") == instrument_name]

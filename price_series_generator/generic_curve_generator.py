@@ -14,13 +14,45 @@ class GenericCurveGenerator(PriceSeriesGenerator):
 
     def _prepare_curve_inputs(self, roll_days: int):
         """
-        Preload expiry and roll dates just once per instrument.
+        Preload expiry and roll dates once per instrument.
+
+        Logic:
+        - Expiry dates are loaded directly from the instrument reference and remain
+          unchanged (exchange-defined contractual expiry).
+        - Roll dates are initially computed as:  roll_date = expiry_date - roll_days.
+        - If the computed roll date falls on an Opera-defined market holiday
+          (based on the instrument's holiday calendar), the roll date is shifted
+          backward day-by-day until it lands on a valid trading day.
+          Only roll dates are adjusted; expiry dates remain fixed.
+
+        This ensures that the generic curve does not attempt to roll on a date with
+        no market data available (holiday), while still respecting the official
+        expiry schedule.
         """
         if self._contract_expiry_dates is None or self._contract_roll_dates is None:
+
+            # Load expiries
             expiry = self.futures_contract.load_underlying_futures_expiry_dates(mode='futures')
+
+            # Initial (raw) roll dates = expiry minus N days
             roll = {k: v - pd.Timedelta(days=roll_days) for k, v in expiry.items()}
+
+            # --- Holiday Adjustment ---
+            roll_dates_adj = {}
+            calendar = self.futures_contract.holiday_calendar
+
+            for contract, rd in roll.items():
+                adj_rd = rd
+
+                # If rd is a holiday, shift backward until we hit a business day
+                while adj_rd in calendar.index and calendar.loc[adj_rd, "is_holiday"] == 1:
+                    adj_rd -= pd.Timedelta(days=1)
+
+                roll_dates_adj[contract] = adj_rd
+
+            # Save attributes
             self._contract_expiry_dates = expiry
-            self._contract_roll_dates = roll
+            self._contract_roll_dates = roll_dates_adj
 
     def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = None,
                                usd_conversion_mode: str = None, fx_df: pd.DataFrame = None,
@@ -51,6 +83,7 @@ class GenericCurveGenerator(PriceSeriesGenerator):
 
         self._prepare_curve_inputs(roll_days)
         df = self.df.copy()
+        df = df.interpolate(method='linear', limit_direction='both', axis=0) #interpolate on raw price first
 
         if usd_conversion_mode == 'pre':
             if fx_df is None:

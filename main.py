@@ -10,6 +10,11 @@ from utils.date_utils import get_prev_biz_days_list
 from db.db_connection import get_engine
 from workflow.shared.forex_workflow import load_forex
 from monte_carlo_simulations.simulator import simulate_ret
+from workflow.shared.data_preparation_workflow import generate_instrument_generic_curves_dict
+from utils.contract_utils import load_instrument_ref_dict
+from utils.date_utils import load_opera_market_calendar
+from price_series_generator.generic_curve_generator import GenericCurveGenerator
+from price_series_loader.derivatives_price_loader import DerivativesPriceLoader
 
 
 
@@ -17,6 +22,44 @@ if __name__ == '__main__':
 
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
+
+    # cob_date = '2025-11-21'
+    # instrument_list = ['OR']
+    # window = 260
+    # usd_conversion_mode = 'pre'
+    # market_calendar = load_opera_market_calendar(instrument_list)
+    # instrument_ref_dict = load_instrument_ref_dict('uat')
+    # fx_spot_df = load_forex(cob_date=cob_date, window=window)
+    # instrument_name = 'OR'
+    # prod_engine = get_engine('prod')
+    #
+    # derivatives_contract = DerivativesContractRefLoader(
+    #     instrument_name=instrument_name,
+    #     source=prod_engine,
+    # )
+    # relevant_months = None
+    # futures_contracts = derivatives_contract.load_contracts(
+    #     mode='futures',
+    #     relevant_months=relevant_months,
+    #     relevant_years=None,
+    #     relevant_options=None
+    # )
+    #
+    # futures_price_loader = DerivativesPriceLoader(
+    #     mode='futures',
+    #     instrument_name=instrument_name,
+    #     source=prod_engine
+    # )
+    # days_list = get_prev_biz_days_list(cob_date, window + 1)
+    # price_df = futures_price_loader.load_prices(
+    #     start_date=days_list[0],
+    #     end_date=cob_date,
+    #     contracts=futures_contracts,
+    #     reindex_dates=days_list,
+    #     instrument_name=instrument_name
+    # )
+    # curve = GenericCurveGenerator(df=price_df, futures_contract=derivatives_contract)
+    # test = curve.generate_generic_curve(1, 14, 'ratio', 'pre', fx_spot_df, cob_date)
 
     ### THIS IS FOR MC SIMULATIONS OF RETURNS
     # ret_df = pd.read_excel('ref_df_sample.xlsx', index_col=0)
@@ -46,7 +89,7 @@ if __name__ == '__main__':
     window = 260
     historical_var_workflow(cob_date=cob_date, product=product, calculation_method=calculation_method, window=window,
                             with_price_var=False, write_to_excel=True)
-    # TODO Fix holiday calendar logic for generic curves -> impact on OR
+
     # TODO Check issue with RT/SRB/BRD tickers - likely due to forex USDCNY
     #### THIS IS FOR RMS VAR
     # product = 'rms'

@@ -1,5 +1,7 @@
 import pandas as pd
 from typing import List, Union
+from sqlalchemy import text
+from db.db_connection import get_engine
 
 
 def get_prev_biz_days_list(date: str, no_of_days: int) -> List[pd.Timestamp]:
@@ -81,3 +83,59 @@ def get_weekdays_between_list(start_date: Union[str, pd.Timestamp],
     weekdays = all_dates[all_dates.weekday < 5]  # 0–4 = Mon–Fri
     return list(weekdays)
 
+def load_opera_market_calendar(instrument: Union[str, list]) -> pd.DataFrame:
+    """
+    Load the Opera market calendar for one or more instruments.
+    Returns a DataFrame indexed by value_date with a single column 'is_holiday'.
+
+    Parameters:
+        instrument (str or list): Product code(s).
+
+    Returns:
+        pd.DataFrame:
+            index: value_date (datetime)
+            column: is_holiday
+    """
+
+    # Convert instrument into SQL filter
+    if isinstance(instrument, str):
+        instr_filter = f"'{instrument}'"
+    elif isinstance(instrument, list) and instrument:
+        instr_filter = ", ".join(f"'{i}'" for i in instrument)
+    else:
+        raise ValueError("Instrument must be a non-empty string or list of strings.")
+
+    query = f"""
+        SELECT product_code, value_date, is_holiday
+        FROM staging.opera_holiday_calendar
+        WHERE product_code IN ({instr_filter})
+    """
+
+    print(query)
+
+    uat_engine = get_engine("uat")
+    with uat_engine.connect() as conn:
+        df = pd.read_sql_query(text(query), conn)
+
+    # Convert value_date to datetime
+    df["value_date"] = pd.to_datetime(df["value_date"])
+
+    # --- VALIDATION: ensure only one product_code present ---
+    unique_products = df["product_code"].unique()
+
+    if len(unique_products) == 0:
+        raise ValueError("No holiday calendar data found for given instrument(s).")
+
+    if len(unique_products) > 1:
+        raise ValueError(
+            f"Holiday calendar contains multiple product codes: {unique_products}. "
+            f"Expected exactly 1. Please load one product at a time."
+        )
+
+    # Drop product_code now that we know it is unique
+    df = df.drop(columns=["product_code"])
+
+    # Set value_date as index
+    df = df.set_index("value_date").sort_index()
+
+    return df

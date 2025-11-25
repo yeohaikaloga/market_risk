@@ -38,7 +38,7 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     # 2. Extract mapped return series
     selected_cols = combined_pos_df["linear_var_map"].astype(str).tolist()
 
-    missing = set(selected_cols) - set(percentage_returns_df.columns)
+    missing = [col for col in selected_cols if col not in percentage_returns_df.columns]
     if missing:
         raise ValueError(f"[ERROR] Missing return series for: {missing}")
 
@@ -47,7 +47,7 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
 
     pnl_matrix = pd.DataFrame(
         returns_matrix,
-        index=combined_pos_df.index,       # keep original index (DO NOT CHANGE)
+        index=combined_pos_df.index,
         columns=percentage_returns_df.index
     )
 

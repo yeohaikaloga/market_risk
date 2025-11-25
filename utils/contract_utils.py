@@ -31,11 +31,7 @@ def load_instrument_ref_dict(source='uat'):
     if source in _instrument_ref_cache:
         return _instrument_ref_cache[source]
 
-    if source == 'hardcoded':
-        _instrument_ref_cache[source] = instrument_ref_hardcoded_dict
-        return _instrument_ref_cache[source]
-
-    elif source == 'uat':
+    if source == 'uat':
         uat_engine = get_engine('uat')
         query = """
             SELECT *
