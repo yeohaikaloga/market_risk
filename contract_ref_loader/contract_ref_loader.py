@@ -1,4 +1,3 @@
-# For reference, e.g. contract_ref_loader: 'CT'; contract_ref_loader: 'CTH4'
 from abc import ABC, abstractmethod
 
 

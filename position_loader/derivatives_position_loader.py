@@ -1,8 +1,9 @@
 from position_loader.position_loader import PositionLoader
-from utils.contract_utils import instrument_ref_dict, custom_monthly_contract_sort_key
+from utils.contract_utils import load_instrument_ref_dict, custom_monthly_contract_sort_key
 import pandas as pd
 from sqlalchemy import text
 import re
+from datetime import datetime
 
 product_map = {'cotton': ['cto'], 'rms-cfs only': ['cfs'], 'rms': ['cfs', 'rmc'], 'rubber': ['rba', 'rbc']}
 
@@ -103,7 +104,7 @@ class DerivativesPositionLoader(PositionLoader):
             GROUP BY {', '.join(group_by_cols)}
         """
         # , 'None') for derivative_type
-        print(query)  # Debug
+        print(query)
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn)
 
@@ -114,6 +115,18 @@ class DerivativesPositionLoader(PositionLoader):
                 print(
                     f"[WARNING]: The following portfolios are not mapped in portfolio_region_mapping_table_ex: {unmapped_ports}")
 
+        if product == 'rubber':
+            pass
+            # last_year = str(datetime.strptime(date, "%Y-%m-%d").year - 1)
+            # last_year_query = f"""
+            #             SELECT cob_date, subportfolio, portfolio, security_id, total_active_lots, tag
+            #             FROM staging.opera_positions_last_year
+            #             WHERE tag = 'LY_data_{last_year}'
+            #         """
+            # print(last_year_query)
+            # with self.source.connect() as conn:
+            #     last_year_df = pd.read_sql_query(text(last_year_query), conn)
+            # df = pd.concat([df, last_year_df], axis=0)
         return df
 
     @staticmethod
@@ -128,7 +141,7 @@ class DerivativesPositionLoader(PositionLoader):
         if cc_num_match:
             return f"CENTRAL {cc_num_match.group(1)}"
 
-        if portfolio.startswith('CC_SP'):
+        if portfolio.x('CC_SP'):
             return 'SPREADS'
 
         if portfolio == 'CC_BK':
@@ -326,16 +339,17 @@ class DerivativesPositionLoader(PositionLoader):
 
     @staticmethod
     def map_generic_curve(row, instrument_dict):
-        instrument = row['product_code'].replace('CM ', '').replace('IM ','')
-        if len(instrument) == 1:
-            instrument = instrument + ' '
-        # TODO Temporary placeholder - need to fix the actual mapping, particular for RMS.
+        instrument = row['product_code'].replace('CM ', '').replace('IM ', '')
+
+        # Skip if no underlying Bloomberg ticker
         if pd.isna(row.get('underlying_bbg_ticker')) or row.get('underlying_bbg_ticker') is None:
             print(f"[SKIP] No underlying_bbg_ticker for {row.get('security_id', 'unknown')} — skipping mapping.")
             return None
+
         contract = row['underlying_bbg_ticker'].replace(' Comdty', '')
         instrument_info = instrument_dict.get(instrument)
-        if not instrument_info or not isinstance(instrument_info, dict):
+
+        if instrument_info is None:
             print(f"[WARN] Instrument '{instrument}' not found or invalid in instrument_dict.")
             return None
 
@@ -345,9 +359,7 @@ class DerivativesPositionLoader(PositionLoader):
             return curve_map[contract]
 
         # Fallback to next available or last contract
-        fallback = DerivativesPositionLoader.map_generic_curve_with_fallback(
-            contract, curve_map
-        )
+        fallback = DerivativesPositionLoader.map_generic_curve_with_fallback(contract, curve_map)
         if fallback:
             print(
                 f"[Fallback] {contract} mapped to {fallback} under instrument {instrument} for {row.get('security_id', '')}")
@@ -384,6 +396,7 @@ class DerivativesPositionLoader(PositionLoader):
             prefix_norm = prefix.rstrip()
 
             # The dict keys may have trailing spaces, so check both forms:
+            instrument_ref_dict = load_instrument_ref_dict('uat')
             if prefix in instrument_ref_dict and 'lots_to_MT_conversion' in instrument_ref_dict[prefix]:
                 conversion = instrument_ref_dict[prefix]['lots_to_MT_conversion']
                 return row['total_active_lots'] * conversion
@@ -437,6 +450,7 @@ class DerivativesPositionLoader(PositionLoader):
 
         # Prepare query values
         position_df['cob_date'] = pd.to_datetime(position_df['cob_date'], errors='coerce')
+        #TODO Due to LY data tag for for rubber, need to split by cob_date. For 2024-12-31/2025-01-01, opera sensitivity no longer available, but this will be for 2025-12-31/2026-01-01
         cob_dates = position_df['cob_date'].dt.strftime('%Y-%m-%d').unique()
         security_ids = position_df['security_id'].unique()
         opera_product = product_map[product]
@@ -519,3 +533,39 @@ class DerivativesPositionLoader(PositionLoader):
             print(f"All positions successfully mapped to sensitivities: {sensitivity_types}")
 
         return merged_df
+
+    def assign_cob_date_price(self, position_df: pd.DataFrame, price_df: pd.DataFrame, cob_date: str) -> pd.DataFrame:
+        """
+        Assign cob_date_price to each position row for a single cob_date.
+
+        Args:
+            position_df: DataFrame with columns ['generic_curve', ...].
+            price_df: pivot-like DataFrame, index=cob_date, columns=generic_curve.
+            cob_date: string date to extract prices for.
+        """
+        position_df = position_df.copy()
+
+        # Ensure index is datetime
+        price_df = price_df.copy()
+        price_df.index = pd.to_datetime(price_df.index)
+        cob_date_dt = pd.to_datetime(cob_date)
+
+        if cob_date_dt not in price_df.index:
+            raise KeyError(f"cob_date {cob_date} not found in price_df index")
+
+        # Extract prices for this cob_date
+        prices_for_date = price_df.loc[cob_date_dt]
+
+        # Map generic_curve -> price
+        position_df['cob_date_price'] = position_df['generic_curve'].map(prices_for_date)
+
+        # Detect missing prices
+        missing = position_df['cob_date_price'].isna()
+        if missing.any():
+            print(f"[WARN] {missing.sum()} positions missing cob_date_price:")
+            print(position_df[missing][['generic_curve']])
+        else:
+            print("All positions mapped to cob_date_price.")
+
+        return position_df
+

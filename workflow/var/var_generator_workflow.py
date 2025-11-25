@@ -2,7 +2,7 @@ from workflow.var.var_calculation_utils import (get_cotton_region_aggregates, ge
                                                 get_rms_aggregates)
 from pnl_analyzer.pnl_analyzer import PnLAnalyzer
 from workflow.var.var_calculation_utils import build_position_index_df, calculate_var_for_regions
-from utils.contract_utils import instrument_ref_dict
+from utils.contract_utils import load_instrument_ref_dict
 
 import pandas as pd
 import os
@@ -117,6 +117,7 @@ def build_cotton_var_report_exceptions(long_pnl_df: pd.DataFrame,
 
     # Step 3: Rename suffixes using instrument_ref_dict and replace underscores
     def replace_suffix(unit):
+        instrument_ref_dict = load_instrument_ref_dict('uat')
         for instrument in instrument_ref_dict.keys():
             product_name = instrument_ref_dict[instrument].get('product_name')
 

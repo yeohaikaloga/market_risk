@@ -1,17 +1,59 @@
 import pandas as pd
 from sqlalchemy import text
 from contract_ref_loader.contract_ref_loader import ContractRefLoader
-from utils.contract_utils import month_codes, custom_monthly_contract_sort_key, instrument_ref_dict
+from utils.contract_utils import month_codes, custom_monthly_contract_sort_key, load_instrument_ref_dict
 
 
 class DerivativesContractRefLoader(ContractRefLoader):
 
-
     def __init__(self, instrument_name, source, params=None):
         super().__init__(instrument_name, source, params)
+
         self.currency = None
-        self.futures_category = None
+        self.opera_futures_category = None
+        self.bbg_futures_category = None
         self._df_tickers = None
+
+        # Load instrument reference dictionary internally
+        from utils.contract_utils import load_instrument_ref_dict
+        instrument_ref_dict = load_instrument_ref_dict('uat')
+
+        # Find all keys with matching Bloomberg code
+        matched_keys = [key for key, ref in instrument_ref_dict.items()
+                        if ref.get("bbg_product_code") == instrument_name]
+
+        if not matched_keys:
+            raise ValueError(
+                f"Instrument '{instrument_name}' not found in instrument_ref_dict."
+            )
+
+        # Prefer keys that end with the instrument_name
+        exact_match_keys = [k for k in matched_keys if k.endswith(instrument_name)]
+        if exact_match_keys:
+            # Pick the shortest key if multiple exact matches exist
+            matched_key = min(exact_match_keys, key=len)
+        else:
+            # fallback to first match
+            matched_key = matched_keys[0]
+
+        # Print if multiple keys matched
+        if len(matched_keys) > 1:
+            print(
+                f"WARNING: Multiple product_codes matched for Bloomberg code '{instrument_name}': "
+                f"{matched_keys}. Selected '{matched_key}'."
+            )
+
+        # Store reference info
+        info = instrument_ref_dict[matched_key]
+        self.product_code = matched_key
+        self.instrument_ref = info
+        self.instrument_name = info["bbg_product_code"]
+
+        # Push convenience attributes
+        self.currency = info.get("currency")
+        self.opera_futures_category = info.get("opera_futures_category")
+        self.bbg_futures_category = info.get("bbg_futures_category")
+        self.product_name = info.get("product_name")
 
     def _build_ticker_regex(self, mode):
         month_letters = ''.join(month_codes.keys())
@@ -46,21 +88,23 @@ class DerivativesContractRefLoader(ContractRefLoader):
         relevant_options = normalize_list(relevant_options)
         relevant_strikes = normalize_list(relevant_strikes)
 
-        # TODO: Fix hardcoded instrument_ref_dict to product_master_table (load function) in contract_utils.py
-        futures_category = instrument_ref_dict.get(self.instrument_name.strip(), {}).get('futures_category')
-        if not futures_category:
+        instrument_name = self.instrument_name
+        if not instrument_name:
             print(f"Instrument '{self.instrument_name}' not found in reference dictionary.")
             return pd.DataFrame()
+        if len(self.instrument_name) == 1:
+            self.instrument_name = self.instrument_name + ' '
 
         if mode == 'futures':
             if relevant_options is not None or relevant_strikes is not None:
                 raise ValueError("Options and strikes should be None when mode is 'futures'")
 
+
+
         month_letters = ''.join(month_codes.keys())
-        if len(self.instrument_name) == 1:
-            self.instrument_name = self.instrument_name + ' '
         regex_comb = f"^{self.instrument_name}[{month_letters}][0-9] COMB Comdty$"
         regex_non_comb = f"^{self.instrument_name}[{month_letters}][0-9] Comdty$"
+        bbg_futures_category = self.bbg_futures_category
 
         query = f"""
             WITH base AS (
@@ -69,7 +113,7 @@ class DerivativesContractRefLoader(ContractRefLoader):
                 LEFT JOIN ref.currency c ON c.id = dc.currency_id 
                 LEFT JOIN ref.instrument i ON i.id = dc.instrument_id
                 LEFT JOIN ref.traded_contract tc ON tc.id = dc.traded_contract_id
-                WHERE dc.futures_category = '{futures_category}'),
+                WHERE dc.futures_category = '{bbg_futures_category}'),
             comb AS (
                 SELECT DISTINCT unique_id_fut_opt FROM base
                 WHERE unique_id_fut_opt ~ '{regex_comb}'),
@@ -124,7 +168,7 @@ class DerivativesContractRefLoader(ContractRefLoader):
 
         if not df.empty:
             self.currency = df.iloc[0]['currency']
-            self.futures_category = df.iloc[0]['futures_category']
+            self.bbg_futures_category = df.iloc[0]['futures_category']
 
         self._df_tickers = df
         print(df.head())
@@ -185,10 +229,11 @@ class DerivativesContractRefLoader(ContractRefLoader):
         return dict(zip(df['unique_id_fut_opt'], pd.to_datetime(df['opt_first_trade_dt'], errors='coerce')))
 
     def load_ref_data(self, mode) -> pd.DataFrame:
+        instrument_ref_dict = load_instrument_ref_dict('uat')
         if self.instrument_name not in instrument_ref_dict:
             raise ValueError(f"Instrument '{self.instrument_name}' not found in reference dictionary.")
 
-        futures_category = instrument_ref_dict[self.instrument_name]['futures_category']
+        bbg_futures_category = instrument_ref_dict[self.instrument_name]['futures_category']
         month_letters = ''.join(month_codes.keys())
         regex_ticker_base = f"^{self.instrument_name}[{month_letters}][0-9]"
 
@@ -205,7 +250,7 @@ class DerivativesContractRefLoader(ContractRefLoader):
         JOIN ref.currency c
         ON c.id = dc.currency_id 
         WHERE dc.ticker ~ '{ticker_regex}'
-        AND futures_category = '{futures_category}'
+        AND futures_category = '{bbg_futures_category}'
         """
         # print(query)
 
@@ -221,8 +266,8 @@ class DerivativesContractRefLoader(ContractRefLoader):
                     f"Multiple reference entries found for instrument '{self.instrument_name}', expected one.")
 
             row = df.iloc[0]
-            self.futures_category = row['futures_category']
+            self.bbg_futures_category = row['futures_category']
             self.currency = row['currency']
 
-        print(f"Loaded ref data for {self.instrument_name}: {self.currency}, {self.futures_category}")
+        print(f"Loaded ref data for {self.instrument_name}: {self.currency}, {self.bbg_futures_category}")
         return df

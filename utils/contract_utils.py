@@ -5,84 +5,50 @@ import numpy as np
 
 month_codes = {'F': 1, 'G': 2, 'H': 3, 'J': 4, 'K': 5, 'M': 6, 'N': 7, 'Q': 8, 'U': 9, 'V': 10, 'X': 11, 'Z': 12}
 
-#TODO to replace with staging.product_master_data; to_USD_conversion - constant_curr_mult; lots_to_MT_conversion - lot_mult
-instrument_ref_dict = {'CT': {'futures_category': 'Fibers', 'to_USD_conversion': 2204.6/100, 'currency': 'USc',
-                              'units': 'lbs', 'lots_to_MT_conversion': 22.679851220176, 'product_name': 'COTTON ICE'},
-                       'VV': {'futures_category': 'Fibers', 'to_USD_conversion': 1, 'currency': 'CNY', 'units': 'MT',
-                              'lots_to_MT_conversion': 5, 'product_name': 'COTTON ZCE'},
-                       'CCL': {'futures_category': 'Fibers', 'to_USD_conversion': 1000/355.56, 'currency': 'INR',
-                               'units': 'candy', 'lots_to_MT_conversion': 22.679851220176, 'product_name': 'MCX COTTON'},
-                       'AVY': {'futures_category': 'Fibers', 'to_USD_conversion': 1000/355.56, 'currency': 'INR',
-                               'units': 'candy', 'lots_to_MT_conversion': 22.679851220176, 'product_name': 'MCX COTTON'},
-                       'OR': {'futures_category': 'Industrial Material', 'to_USD_conversion': 1000/100, 'currency': 'USc',
-                              'lots_to_MT_conversion': 5},
-                       'JN': {'futures_category': 'Industrial Material', 'to_USD_conversion': 1000, 'currency': 'JPY',
-                              'lots_to_MT_conversion': 5},
-                       'SRB': {'futures_category': 'Industrial Material', 'to_USD_conversion': 1, 'currency': 'CNY',
-                               'lots_to_MT_conversion': 10},
-                       'RT': {'futures_category': 'Industrial Material', 'to_USD_conversion': 1,
-                              'lots_to_MT_conversion': 10},
-                       'BDR': {'futures_category': 'Industrial Material', 'to_USD_conversion': 1, 'currency': 'CNY',
-                               'lots_to_MT_conversion': 5},
-                       'RG': {'futures_category': 'Industrial Material', 'to_USD_conversion': 1000/100,
-                              'currency': 'USc', 'lots_to_MT_conversion': 5},
-                       'C': {'futures_category': 'Corn', 'to_USD_conversion': 39.36821/100, 'currency': 'USc',
-                              'lots_to_MT_conversion': 127.01, 'product_name': 'CORN CBOT'},
-                       'EP': {'futures_category': 'Corn', },
-                       'CRD': {'futures_category': 'Corn'},
-                       'AC': {'futures_category': 'Corn'},
-                       'CA': {'futures_category': 'Wheat'},
-                       'W': {'futures_category': 'Wheat', 'to_USD_conversion': 36.74371/100, 'currency': 'USc',
-                              'lots_to_MT_conversion': 136.08, 'product_name': 'WHEAT'},
-                       'KW': {'futures_category': 'Wheat', },
-                       'MW': {'futures_category': 'Wheat'},
-                       'KFP': {'futures_category': 'Wheat'},
-                       'S': {'futures_category': 'Soy', 'to_USD_conversion': 36.74371/100, 'currency': 'USc',
-                              'lots_to_MT_conversion': 136.08, 'product_name': 'SOYBEAN'},
-                       'SM': {'futures_category': 'Soy'},
-                       'BO': {'futures_category': 'Soy'},
-                       'AE': {'futures_category': 'Soy'},
-                       'SRS': {'futures_category': 'Soy'},
-                       'AK': {'futures_category': 'Soy'},
-                       'BP': {'futures_category': 'Soy'},
-                       'SH': {'futures_category': 'Soy'},
-                       'DL': {'futures_category': 'Refined Products'},
-                       'QS': {'futures_category': 'Refined Products'},
-                       'THE': {'futures_category': 'Refined Products'},
-                       'HO': {'futures_category': 'Refined Products'},
-                       'SB': {'futures_category': 'Foodstuff', 'to_USD_conversion': 2204.6/100, 'currency': 'USc',
-                               'units': 'lbs', 'lots_to_MT_conversion': 22.679851220176, 'product_name': 'NY SUGAR'},
-                       'QW': {'futures_category': 'Foodstuff'},
-                       'DF': {'futures_category': 'Foodstuff'},
-                       'CC': {'futures_category': 'Foodstuff'},
-                       'KC': {'futures_category': 'Foodstuff'},
-                       'QC': {'futures_category': 'Foodstuff'},
-                       'AX': {'futures_category': 'Foodstuff'},
-                       'KO': {'futures_category': 'Foodstuff'},
-                       'PAL': {'futures_category': 'Foodstuff'},
-                       'VPC': {'futures_category': 'Foodstuff'},
-                       'MDS': {'futures_category': 'Foodstuff'},
-                       'DA': {'futures_category': 'Foodstuff'},
-                       'IJ': {'futures_category': 'Other Grain'},
-                       'RS': {'futures_category': 'Other Grain'},
-                       'ZRR': {'futures_category': 'Other Grain'},
-                       'LHD': {'futures_category': 'Livestock'}}
-def load_instrument_ref_dict(source):
+product_code_to_bbg_futures_category_mapping = {'CM CT': 'Fibers', 'CM VV': 'Fibers', 'CM CCL': 'Fibers',
+                                                'CM AVY': 'Fibers', 'CM OR': 'Industrial Material',
+                                                'CM JN': 'Industrial Material', 'CM SRB': 'Industrial Material',
+                                                'IM RT': 'Industrial Material', 'CM BDR': 'Industrial Material',
+                                                'CM RG': 'Industrial Material', 'CM C': 'Corn', 'CM CRD': 'Corn',
+                                                'CM AC': 'Corn', 'CM W': 'Wheat', 'CM KW': 'Wheat', 'CM MW': 'Wheat',
+                                                'CM KFP': 'Wheat', 'CM S': 'Soy', 'CM SM': 'Soy', 'CM BO': 'Soy',
+                                                'CM AE': 'Soy', 'CM SRS': 'Soy', 'CM AK': 'Soy', 'CM BP': 'Soy',
+                                                'CM SH': 'Soy', 'CM DL': 'Refined Products', 'CM QS': 'Refined Products',
+                                                'CM THE': 'Refined Products', 'CM HO': 'Refined Products',
+                                                'CM SB': 'Foodstuff', 'CM QW': 'Foodstuff', 'CM DF': 'Foodstuff',
+                                                'CM CC': 'Foodstuff', 'CM KC': 'Foodstuff', 'CM QC': 'Foodstuff',
+                                                'CM AX': 'Foodstuff', 'CM KO': 'Foodstuff', 'CM PAL': 'Foodstuff',
+                                                'CM VPC': 'Foodstuff', 'CM MDS': 'Foodstuff', 'CM DA': 'Foodstuff',
+                                                'CM IJ': 'Other Grain', 'CM RS': 'Other Grain', 'CM ZRR': 'Other Grain',
+                                                'CM LHD': 'Livestock'}
+
+
+_instrument_ref_cache = {}
+def load_instrument_ref_dict(source='uat'):
+    global _instrument_ref_cache
+
+    # If already loaded, reuse
+    if source in _instrument_ref_cache:
+        return _instrument_ref_cache[source]
+
     if source == 'hardcoded':
-        return instrument_ref_dict
+        _instrument_ref_cache[source] = instrument_ref_hardcoded_dict
+        return _instrument_ref_cache[source]
+
     elif source == 'uat':
         uat_engine = get_engine('uat')
-        query = f"""
+        query = """
             SELECT *
             FROM staging.product_master_data
-            """
+        """
         with uat_engine.connect() as conn:
             df = pd.read_sql_query(text(query), conn)
-            #print(df.head())
-        instrument_ref_dict = {}
+
+        result = {}
         for _, row in df.iterrows():
             code = row['invenio_product_code']
-            instrument_ref_dict[code] = {
+            bbg_futures_category = product_code_to_bbg_futures_category_mapping.get(code)
+            result[code] = {
                 'bbg_product_code': row['bbg_product_code'],
                 'product_name': row['product_name'],
                 'exchange_name': row['exchange_name'],
@@ -92,12 +58,15 @@ def load_instrument_ref_dict(source):
                 'to_USD_conversion': row['constant_curr_mult'],
                 'curr_mult_factor': row['curr_mult_factor'],
                 'curr_mult_type': row['curr_mult_type'],
-                'futures_category': row['asset_class'].capitalize()
+                'opera_futures_category': row['asset_class'].capitalize(),
+                'bbg_futures_category': bbg_futures_category
             }
-        return instrument_ref_dict
+
+        _instrument_ref_cache[source] = result
+        return result
+
     else:
-        print("No instrument_ref_dict in source. Check source.")
-        return instrument_ref_dict
+        raise ValueError("Invalid source requested for instrument reference dictionary")
 
 def custom_monthly_contract_sort_key(contract):
     contract_part = contract.replace(' COMB', '').replace(' Comdty', '')

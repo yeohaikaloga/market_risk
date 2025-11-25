@@ -22,8 +22,9 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             self._contract_expiry_dates = expiry
             self._contract_roll_dates = roll
 
-    # TODO: Add USD/native currency flag option
-    def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = 'none') -> pd.DataFrame:
+    def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = None,
+                               usd_conversion_mode: str = None, fx_df: pd.DataFrame = None,
+                               cob_date: str = None) -> pd.DataFrame:
         """
         Generate the N-th generic futures curve with optional early rolling and backward adjustment.
 
@@ -32,7 +33,8 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             CTK4).
             position (int): Generic position_loader to compute (1 = front, 2 = second, etc.).
             roll_days (int): Number of business days before a contract_ref_loader's last availability to roll.
-            adjustment (str): 'none', 'ratio', or 'difference'.
+            adjustment (str): None, 'ratio', or 'difference'.
+            usd_conversion_mode (str): None, 'pre', or 'post'
 
         Returns:
         pd.DataFrame: DataFrame indexed by date with columns:
@@ -43,12 +45,27 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             'price_series_loader'.
             - 'adjustment_values': The cumulative adjustment factor or difference applied on each date.
         """
-        valid_adjustments = {'none', 'ratio', 'difference'}
+        valid_adjustments = {None, 'ratio', 'difference'}
         if adjustment not in valid_adjustments:
-            raise ValueError(f"Invalid adjustment method: {adjustment}. Must be one of {valid_adjustments}")
+            raise ValueError(f"Invalid adjustment method: {adjustment}. Must be None or {valid_adjustments}")
 
         self._prepare_curve_inputs(roll_days)
-        df = self.df
+        df = self.df.copy()
+
+        if usd_conversion_mode == 'pre':
+            if fx_df is None:
+                raise ValueError("fx_rates DataFrame must be provided for USD conversion")
+
+            # Identify currency of the instrument from the futures contract
+            instrument_currency = self.futures_contract.currency
+            if instrument_currency.upper() == 'USD':
+                pass  # already USD
+            else:
+                fx_rate = 'USD' + instrument_currency.upper()
+                if fx_rate not in fx_df.columns:
+                    raise ValueError(f"FX rates for {fx_rate} not found in fx_rates DataFrame")
+                df = df.div(fx_df[fx_rate], axis=0)
+
         contracts = df.columns.tolist()
         print('columns:', contracts)
         index = df.index
@@ -142,17 +159,44 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             generic_curve['adjustment_values'] = pd.Series(adjustment_values)
 
         else:
-            # No adjustment: just copy
             generic_curve['final_price'] = generic_curve['price_series_loader']
             generic_curve['adjustment_values'] = pd.NA
+
+        if usd_conversion_mode == 'post':
+            if fx_df is None:
+                raise ValueError("fx_df DataFrame must be provided for USD conversion")
+
+            if cob_date is None:
+                raise ValueError("cob_date must be provided for post USD conversion")
+
+            instrument_currency = self.futures_contract.currency
+
+            if instrument_currency.upper() == 'USD':
+                # Already in USD
+                generic_curve['final_price_USD'] = generic_curve['final_price']
+            else:
+                fx_rate = 'USD' + instrument_currency.upper()
+                if fx_rate not in fx_df.columns:
+                    raise ValueError(f"FX rates for {fx_rate} not found in fx_df")
+
+                # Use only the FX rate on cob_date
+                if cob_date not in fx_df.index:
+                    raise ValueError(f"COB date {cob_date} not found in fx_df index")
+
+                fx_rate = fx_df.at[cob_date, fx_rate]
+                generic_curve['fx_rate'] = fx_rate
+                generic_curve['final_price_USD'] = generic_curve['final_price'] / generic_curve['fx_rate']
+        else:
+            generic_curve['final_price_USD'] = generic_curve['final_price']
 
         # Fill any remaining NaNs forward
         generic_curve = generic_curve.ffill()
         return generic_curve
 
     def generate_generic_curves_df_up_to(self, max_position: int, roll_days: int = 14,
-                                         adjustment: str = 'none', label_prefix: str = '') \
-            -> tuple[pd.DataFrame, pd.DataFrame]:
+                                         adjustment: str = None, label_prefix: str = '',
+                                         usd_conversion_mode: str = None, fx_df: pd.DataFrame = None,
+                                         cob_date: str = None) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
 
         Generate and combine multiple generic curves (e.g., G1, G2, G3...) into one DataFrame.
@@ -172,9 +216,16 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         active_contracts_df = pd.DataFrame(index=self.df.index)
 
         for pos in range(1, max_position + 1):
-            curve = self.generate_generic_curve(position=pos, roll_days=roll_days, adjustment=adjustment)
+            curve = self.generate_generic_curve(position=pos,
+                                                roll_days=roll_days,
+                                                adjustment=adjustment,
+                                                usd_conversion_mode=usd_conversion_mode,
+                                                fx_df=fx_df,
+                                                cob_date=cob_date)
+            if len(label_prefix) == 1:
+                label_prefix = label_prefix + ' '
             col_name = f"{label_prefix}{pos}" if label_prefix else str(pos)
-            combined_df[col_name] = curve['final_price']
+            combined_df[col_name] = curve['final_price_USD']
             active_contracts_df[col_name] = curve['active_contract']
 
         return combined_df, active_contracts_df

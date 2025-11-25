@@ -27,9 +27,6 @@ def relative_returns(prices: pd.DataFrame | pd.Series) -> pd.DataFrame | pd.Seri
     # Replace inf and -inf with NaN
     returns = returns.replace([np.inf, -np.inf], np.nan)
 
-    # Optional: drop all-NaN rows (comment out if not desired)
-    returns = returns.dropna(how='all')
-
     return returns
 
 

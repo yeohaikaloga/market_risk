@@ -79,9 +79,11 @@ class PhysicalPositionLoader(PositionLoader):
 
     def _load_filtered_rubber_positions(self, cob_date: str) -> pd.DataFrame:
         #TODO to change the table name accordingly
-        query = """
+        query = f"""
             SELECT * 
-            FROM staging.ors_positions_updated_test
+            FROM staging.ors_positions
+            WHERE source in ('ors_Rubber_All_Trade_Origin', 'ors_Rubber_All_Trades')
+            AND cob_date = '{cob_date}'
             """
         print(query)
         with self.source.connect() as conn:
@@ -90,8 +92,6 @@ class PhysicalPositionLoader(PositionLoader):
         # Apply consistent filters
         df['Delta Quantity'] = pd.to_numeric(df['Delta Quantity'], errors='coerce')
         df = df[df['Delta Quantity'] != 0.0]
-        #cob_date = cob_date + ' 00:00:00'
-        df= df[df['tdate'] == cob_date]
         print(df.head())
         return df
 
@@ -221,3 +221,38 @@ class PhysicalPositionLoader(PositionLoader):
             print("All rows successfully mapped to basis_series.")
 
         return df
+
+    def assign_cob_date_price(self, position_df: pd.DataFrame, price_df: pd.DataFrame, cob_date: str) -> pd.DataFrame:
+        """
+        Assign cob_date_price to each position row for a single cob_date.
+
+        Args:
+            position_df: DataFrame with columns ['generic_curve', ...].
+            price_df: pivot-like DataFrame, index=cob_date, columns=generic_curve.
+            cob_date: string date to extract prices for.
+        """
+        position_df = position_df.copy()
+
+        # Ensure index is datetime
+        price_df = price_df.copy()
+        price_df.index = pd.to_datetime(price_df.index)
+        cob_date_dt = pd.to_datetime(cob_date)
+
+        if cob_date_dt not in price_df.index:
+            raise KeyError(f"cob_date {cob_date} not found in price_df index")
+
+        # Extract prices for this cob_date
+        prices_for_date = price_df.loc[cob_date_dt]
+
+        # Map generic_curve -> price
+        position_df['cob_date_price'] = position_df['generic_curve'].map(prices_for_date)
+
+        # Detect missing prices
+        missing = position_df['cob_date_price'].isna()
+        if missing.any():
+            print(f"[WARN] {missing.sum()} positions missing cob_date_price:")
+            print(position_df[missing][['generic_curve']])
+        else:
+            print("All positions mapped to cob_date_price.")
+
+        return position_df
