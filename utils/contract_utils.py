@@ -84,15 +84,20 @@ instrument_list = [
 ]
 product_specifications = {'cotton': {'instrument_list': ['CT', 'VV', 'AVY', 'C', 'W', 'S', 'BO',
                                                          'SM', 'IJ', 'SB', 'QW'],
-                                     'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}, # same as grains 'after_ret'
+                                     'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}, # same as grains 'after_ret'
+                                     'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}},
                           'rubber': {'instrument_list': ['OR', 'JN', 'SRB', 'RT', 'BDR', 'RG'],
-                                     'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}, # same as grains 'before_ret'
+                                     'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx',
+                                     'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}, # same as grains 'before_ret'
+                                     'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}},
                           'rms': {'instrument_list': ['KC', 'DF', 'CC', 'QC', 'CT', 'SB', 'QW', 'S', 'SM', 'BO', 'C',
                                                       'W', 'KW', 'MW', 'CA', 'EP', 'IJ', 'RS', 'CRD', 'AX', 'KO', 'OR',
                                                       'AE', 'VV', 'AC', 'LHD', 'SRS', 'PAL', 'RT', 'ZRR', 'AK', 'BP',
                                                       'SH', 'VPC', 'QS', 'THE', 'HO', 'MDS', 'DA', 'BDR', 'KFP', 'LC',
                                                       'FC', 'LS', 'CO', 'CL', 'EN', 'XB', 'NG'],
-                                  'usd_conversion_mode': 'post', 'forex_mode': 'daily_fx'}}
+                                  'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'daily_fx'},
+                                  'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}}}
+
 done = ['KC', 'DF', 'CC', 'QC', 'CT', 'SB', 'QW', 'S', 'SM', 'BO', 'C',
                                                       'W', 'KW', 'MW', 'IJ', 'RS', 'CRD', 'AX', 'KO', 'OR',
                                                       'AE', 'VV', 'PAL', 'RT', 'ZRR', 'AK', 'BP',

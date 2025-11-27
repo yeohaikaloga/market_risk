@@ -59,16 +59,19 @@ if __name__ == '__main__':
     # product = 'cotton'
     # calculation_method = 'linear'
     # window = 260
-    # historical_var_workflow(cob_date=cob_date, product=product, calculation_method=calculation_method, window=window,
-    #                         with_price_var=True, write_to_excel=True)
+    # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+    #                             calculation_method=calculation_method, window=window,
+    #                             with_price_var=False, write_to_excel=True)
 
     #### THIS IS FOR RUBBER VAR
     cob_date = '2025-11-21' # Only have ORS positions for 2025-10-31 and 2025-11-05, but no derivs for 2025-10-31.
     # Sensitivity report not cleaned up for 2025-11-06 double entry opera sensitivity; no entry for 2025-11-07
     product = 'rubber'
+    simulation_method = 'hist_sim'
     calculation_method = 'linear'
     window = 260
-    historical_var_workflow(cob_date=cob_date, product=product, calculation_method=calculation_method, window=window,
+    historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+                            calculation_method=calculation_method, window=window,
                             with_price_var=False, write_to_excel=True)
 
     # TODO Check issue with RT/SRB/BRD tickers - likely due to forex USDCNY
@@ -78,7 +81,8 @@ if __name__ == '__main__':
     # calculation_method = 'taylor_series'
     # window = 260
     #
-    # historical_var_workflow(cob_date=cob_date, product=product, calculation_method=calculation_method, window=window,
-    #                         with_price_var=False, write_to_excel=True)
+    # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+    #                             calculation_method=calculation_method, window=window,
+    #                             with_price_var=False, write_to_excel=True)
 
 

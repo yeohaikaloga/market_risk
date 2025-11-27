@@ -10,14 +10,15 @@ import os
 from datetime import datetime
 from utils.log_utils import get_logger
 
-def historical_var_workflow(cob_date: str, product: str, calculation_method: str, window: int, with_price_var: bool, write_to_excel: bool):
+def historical_var_workflow(cob_date: str, product: str, simulation_method: str, calculation_method: str, window: int, with_price_var: bool, write_to_excel: bool):
     logger = get_logger(__name__)
-    logger.info(f"Running historical VaR workflow for product: {product}, COB: {cob_date}, Method: {calculation_method}, Window: {window}")
+    logger.info(f"Running historical VaR workflow for product: {product}, COB: {cob_date}, "
+                f"Simulation Method: {simulation_method}, Calculation Method: {calculation_method}, Window: {window}")
 
-    filename = f"{cob_date}_{product[:3]}_{calculation_method}_var_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"{cob_date}_{product[:3]}_{simulation_method}_{calculation_method}_var_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     # === STEP 1: Prepare Market Data ===
-    prices_df, returns_df, instrument_dict = build_product_prices_returns_dfs(cob_date, product, window)
+    prices_df, returns_df, instrument_dict = build_product_prices_returns_dfs(cob_date, product, window, simulation_method)
     logger.info("STEP 1: Market data prepared")
 
     # === STEP 2: Prepare Positions Data ===

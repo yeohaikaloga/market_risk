@@ -244,10 +244,10 @@ def build_instrument_vol_change_dict(instrument_list: list, cob_date: str, windo
     return instrument_vol_dict
 
 
-def build_product_prices_returns_dfs(cob_date: str, product: str, window: int):
+def build_product_prices_returns_dfs(cob_date: str, product: str, window: int, simulation_method: str):
     instrument_list = product_specifications[product]['instrument_list']
-    usd_conversion_mode = product_specifications[product]['usd_conversion_mode']
-    forex_mode = product_specifications[product]['forex_mode']
+    usd_conversion_mode = product_specifications[product][simulation_method]['usd_conversion_mode']
+    forex_mode = product_specifications[product][simulation_method]['forex_mode']
     fx_spot_df = load_forex(cob_date=cob_date, window=window)
 
     prices_df, relative_returns_df, instrument_dict = build_instrument_generic_curves(instrument_list, cob_date, window,
