@@ -16,10 +16,11 @@ class ForexPriceLoader:
         self.price_history = None
 
     def load_prices(
-        self,
-        start_date: str,
-        end_date: str,
-        reindex_dates: pd.DatetimeIndex = None,
+            self,
+            start_date: str,
+            end_date: str,
+            reindex_dates: pd.DatetimeIndex = None,
+            type: str | None = None,
     ) -> pd.DataFrame:
 
         if self.ref_loader is None:
@@ -29,7 +30,7 @@ class ForexPriceLoader:
         base_ccy = self.ref_loader._last_base_ccy
         quote_ccy = self.ref_loader._last_quote_ccy
         fwd_mon = self.ref_loader._last_fwd_mon
-        type = self.ref_loader._last_type
+        type_filter = type or self.ref_loader._last_type
 
         if base_ccy is None or quote_ccy is None:
             raise ValueError("ForexRefLoader must have metadata loaded first")
@@ -47,18 +48,17 @@ class ForexPriceLoader:
 
         cur_pairs = [f"{b}{q}" for b, q in product(base_ccy, quote_ccy)]
 
-        # Base SQL
+        # SQL
         params = {"pairs": tuple(cur_pairs)}
         query = """
         SELECT
             mkt_date::date AS date,
             cur_pair AS fx_ticker,
             last_price AS fx_rate
-        FROM staging.ors_bbr_series_am_ex
+        FROM staging.vw_combined_fx_data
         WHERE cur_pair IN :pairs
         """
-        # TODO change table to be ors_bbr_series_ro_am_ex after testign and ensure that the data within is accurate.
-        # Apply fwd_mon filter
+
         if fwd_mon is not None:
             if str(fwd_mon).upper() == "NULL":
                 query += " AND fwd_mon IS NULL"
@@ -66,28 +66,27 @@ class ForexPriceLoader:
                 query += " AND fwd_mon = :fwd_mon"
                 params["fwd_mon"] = fwd_mon
 
-        # Apply type filter
-        if type:
+        if type_filter:
             query += " AND type = :type"
-            params["type"] = type
+            params["type"] = type_filter
 
-        # Apply date range
         query += " AND mkt_date BETWEEN :start AND :end"
         params["start"] = start_date
         params["end"] = end_date
 
         query += " ORDER BY mkt_date, cur_pair"
 
-        query_str = query
-        for k, v in params.items():
-            if isinstance(v, tuple):
-                val = "(" + ",".join(f"'{x}'" for x in v) + ")"
+        expanded_query = query
+        for key, value in params.items():
+            if isinstance(value, tuple):
+                replacement = "(" + ", ".join(f"'{v}'" for v in value) + ")"
             else:
-                val = f"'{v}'"
-            query_str = query_str.replace(f":{k}", val)
-        print(query_str)
+                replacement = f"'{value}'"
+            expanded_query = expanded_query.replace(f":{key}", replacement)
 
-        # Execute query
+        print(expanded_query)
+
+        # Execute query safely using bound parameters
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn, params=params)
 
@@ -98,15 +97,18 @@ class ForexPriceLoader:
 
         # Pivot
         df["date"] = pd.to_datetime(df["date"])
-        price_df = df.pivot_table(index="date", columns="fx_ticker", values="fx_rate", aggfunc="last")
-        price_df = price_df.reindex(sorted(price_df.columns), axis=1)
+        price_df = df.pivot_table(
+            index="date",
+            columns="fx_ticker",
+            values="fx_rate",
+            aggfunc="last"
+        ).sort_index(axis=1)
 
-        # Reindex dates if needed
         if reindex_dates is not None:
             price_df = price_df.reindex(reindex_dates)
 
-        # Forward-fill missing dates
         price_df = price_df.ffill()
 
         self.price_history = price_df
         return price_df
+

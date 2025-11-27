@@ -3,6 +3,7 @@ from db.db_connection import get_engine
 import pandas as pd
 import numpy as np
 
+
 month_codes = {'F': 1, 'G': 2, 'H': 3, 'J': 4, 'K': 5, 'M': 6, 'N': 7, 'Q': 8, 'U': 9, 'V': 10, 'X': 11, 'Z': 12}
 
 product_code_to_bbg_futures_category_mapping = {'CM CT': 'Fibers', 'CM VV': 'Fibers', 'CM CCL': 'Fibers',
@@ -13,17 +14,18 @@ product_code_to_bbg_futures_category_mapping = {'CM CT': 'Fibers', 'CM VV': 'Fib
                                                 'CM AC': 'Corn', 'CM W': 'Wheat', 'CM KW': 'Wheat', 'CM MW': 'Wheat',
                                                 'CM KFP': 'Wheat', 'CM S': 'Soy', 'CM SM': 'Soy', 'CM BO': 'Soy',
                                                 'CM AE': 'Soy', 'CM SRS': 'Soy', 'CM AK': 'Soy', 'CM BP': 'Soy',
-                                                'CM SH': 'Soy', 'CM DL': 'Refined Products', 'CM QS': 'Refined Products',
-                                                'CM THE': 'Refined Products', 'CM HO': 'Refined Products',
-                                                'CM SB': 'Foodstuff', 'CM QW': 'Foodstuff', 'CM DF': 'Foodstuff',
-                                                'CM CC': 'Foodstuff', 'CM KC': 'Foodstuff', 'CM QC': 'Foodstuff',
-                                                'CM AX': 'Foodstuff', 'CM KO': 'Foodstuff', 'CM PAL': 'Foodstuff',
-                                                'CM VPC': 'Foodstuff', 'CM MDS': 'Foodstuff', 'CM DA': 'Foodstuff',
-                                                'CM IJ': 'Other Grain', 'CM RS': 'Other Grain', 'CM ZRR': 'Other Grain',
-                                                'CM LHD': 'Livestock'}
-
+                                                'CM SH': 'Soy', 'CM DL': 'Refined Products',
+                                                'CM QS': 'Refined Products', 'CM THE': 'Refined Products',
+                                                'CM HO': 'Refined Products', 'CM SB': 'Foodstuff', 'CM QW': 'Foodstuff',
+                                                'CM DF': 'Foodstuff', 'CM CC': 'Foodstuff', 'CM KC': 'Foodstuff',
+                                                'CM QC': 'Foodstuff', 'CM AX': 'Foodstuff', 'CM KO': 'Foodstuff',
+                                                'CM PAL': 'Foodstuff', 'CM VPC': 'Foodstuff', 'CM MDS': 'Foodstuff',
+                                                'CM DA': 'Foodstuff', 'CM IJ': 'Other Grain', 'CM RS': 'Other Grain',
+                                                'CM ZRR': 'Other Grain', 'CM LHD': 'Livestock'}
 
 _instrument_ref_cache = {}
+
+
 def load_instrument_ref_dict(source='uat'):
     global _instrument_ref_cache
 
@@ -64,10 +66,43 @@ def load_instrument_ref_dict(source='uat'):
     else:
         raise ValueError("Invalid source requested for instrument reference dictionary")
 
+def extract_instrument_from_product_code(product_code: str, ref_dict: dict) -> str:
+    if product_code in ref_dict.keys():
+        tokens = str(product_code).split()
+        if len(tokens[1]) > 1:
+            return tokens[1]  # second token
+        else:
+            # single token, pad with space
+            return tokens[1] + ' '
+    else:
+        return product_code
+
+instrument_ref_dict = load_instrument_ref_dict('uat')
+instrument_list = [
+    extract_instrument_from_product_code(pc, instrument_ref_dict)
+    for pc in instrument_ref_dict.keys()
+]
+product_specifications = {'cotton': {'instrument_list': ['CT', 'VV', 'AVY', 'C', 'W', 'S', 'BO',
+                                                         'SM', 'IJ', 'SB', 'QW'],
+                                     'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}, # same as grains 'after_ret'
+                          'rubber': {'instrument_list': ['OR', 'JN', 'SRB', 'RT', 'BDR', 'RG'],
+                                     'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}, # same as grains 'before_ret'
+                          'rms': {'instrument_list': ['KC', 'DF', 'CC', 'QC', 'CT', 'SB', 'QW', 'S', 'SM', 'BO', 'C',
+                                                      'W', 'KW', 'MW', 'CA', 'EP', 'IJ', 'RS', 'CRD', 'AX', 'KO', 'OR',
+                                                      'AE', 'VV', 'AC', 'LHD', 'SRS', 'PAL', 'RT', 'ZRR', 'AK', 'BP',
+                                                      'SH', 'VPC', 'QS', 'THE', 'HO', 'MDS', 'DA', 'BDR', 'KFP', 'LC',
+                                                      'FC', 'LS', 'CO', 'CL', 'EN', 'XB', 'NG'],
+                                  'usd_conversion_mode': 'post', 'forex_mode': 'daily_fx'}}
+done = ['KC', 'DF', 'CC', 'QC', 'CT', 'SB', 'QW', 'S', 'SM', 'BO', 'C',
+                                                      'W', 'KW', 'MW', 'IJ', 'RS', 'CRD', 'AX', 'KO', 'OR',
+                                                      'AE', 'VV', 'PAL', 'RT', 'ZRR', 'AK', 'BP',
+                                                      'SH', 'VPC', 'DA', 'BDR', 'KFP', ]
+problem = ['CA', 'EP', 'AC', 'LHD', 'SRS', 'QS', 'THE', 'HO', 'MDS', 'LC', 'FC', 'LS', 'CO', 'CL', 'EN', 'XB', 'NG']
+
 def custom_monthly_contract_sort_key(contract):
     contract_part = contract.replace(' COMB', '').replace(' Comdty', '')
     if len(contract_part) < 3:
-        return (contract_part, 0, 0)
+        return contract_part, 0, 0
     # Extract month and year chars
     month_char = contract_part[-2]
     year_digit = contract_part[-1]
@@ -81,7 +116,8 @@ def custom_monthly_contract_sort_key(contract):
 
     month = month_codes.get(month_char, 0)
 
-    return (instrument_name, year, month)
+    return instrument_name, year, month
+
 
 def get_month_code(month: int) -> str | None:
     """
@@ -93,16 +129,9 @@ def get_month_code(month: int) -> str | None:
             return code
     return None
 
-def extract_instrument_from_product_code(product_code: str, ref_dict: dict) -> str:
-    if product_code in ref_dict.keys():
-        tokens = str(product_code).split()
-        if len(tokens[1]) > 1:
-            return tokens[1]  # second token
-        else:
-            # single token, pad with space
-            return tokens[1] + ' '
-    else:
-        return product_code
+
+
+
 
 def obtain_product_code_from_instrument_name(instrument_name: str, ref_dict: dict):
     instrument_name = instrument_name.strip().upper()

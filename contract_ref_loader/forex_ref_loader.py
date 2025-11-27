@@ -2,6 +2,7 @@ import pandas as pd
 from itertools import product
 from sqlalchemy import text
 from contract_ref_loader.contract_ref_loader import ContractRefLoader
+from utils.log_utils import get_logger
 
 class ForexRefLoader(ContractRefLoader):
     """
@@ -23,7 +24,7 @@ class ForexRefLoader(ContractRefLoader):
         base_ccy: str | list = None,
         quote_ccy: str | list = None,
         fwd_mon: str | None = None,  # None=no filter, 'NULL'=filter blanks
-        type: str = None
+        type: str | None = None
     ) -> pd.DataFrame:
         if base_ccy is None or quote_ccy is None:
             raise ValueError("Both base_ccy and quote_ccy must be provided")

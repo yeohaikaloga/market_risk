@@ -14,7 +14,7 @@ class PhysicalPriceLoader(PriceLoader):
         if instrument_id == 'A Index':
             external_name_filter = f"pc.external_name LIKE '%A Index'"
 
-        # DISTINCT should not have to be there...
+        # TODO DISTINCT should not have to be there...
         query = f"""
             SELECT DISTINCT pmp.tdate, pmp.px_settle, pc.external_name, pc.shipment_month, 
                    pi.origin, pi.type, pi.grade, pi.crop_year, pi.crop_year_label
@@ -57,13 +57,12 @@ class PhysicalPriceLoader(PriceLoader):
 
         return df
 
-    def load_ex_gins6_prices_from_staging(self, start_date, end_date, data_source, reindex_dates=None) -> pd.DataFrame:
+    def load_ex_gins6_prices_from_staging(self, start_date, end_date, reindex_dates=None) -> pd.DataFrame:
 
-        if data_source == 'EX GIN S6':
-            query = f"""
-            SELECT * FROM staging.cotton_shankar6_price
-            WHERE date BETWEEN '{start_date}' AND '{end_date}'
-            """
+        query = f"""
+        SELECT * FROM staging.cotton_shankar6_price
+        WHERE date BETWEEN '{start_date}' AND '{end_date}'
+        """
 
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn)

@@ -78,7 +78,6 @@ class PhysicalPositionLoader(PositionLoader):
         return df
 
     def _load_filtered_rubber_positions(self, cob_date: str) -> pd.DataFrame:
-        #TODO to change the table name accordingly
         query = f"""
             SELECT * 
             FROM staging.ors_positions

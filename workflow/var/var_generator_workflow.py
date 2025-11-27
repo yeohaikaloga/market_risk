@@ -1,11 +1,10 @@
-from workflow.var.var_calculation_utils import (get_cotton_region_aggregates, get_rubber_region_aggregates,
-                                                get_rms_aggregates)
+from utils.var_calculation_utils import (get_cotton_region_aggregates, get_rubber_region_aggregates,
+                                         get_rms_aggregates)
 from pnl_analyzer.pnl_analyzer import PnLAnalyzer
-from workflow.var.var_calculation_utils import build_position_index_df, calculate_var_for_regions
+from utils.var_calculation_utils import build_position_index_df, calculate_var_for_regions
 from utils.contract_utils import load_instrument_ref_dict
 
 import pandas as pd
-import os
 
 
 def generate_var(product, combined_pos_df, long_pnl_df, cob_date, window) -> pd.DataFrame:

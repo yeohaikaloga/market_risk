@@ -115,18 +115,6 @@ class DerivativesPositionLoader(PositionLoader):
                 print(
                     f"[WARNING]: The following portfolios are not mapped in portfolio_region_mapping_table_ex: {unmapped_ports}")
 
-        if product == 'rubber':
-            pass
-            # last_year = str(datetime.strptime(date, "%Y-%m-%d").year - 1)
-            # last_year_query = f"""
-            #             SELECT cob_date, subportfolio, portfolio, security_id, total_active_lots, tag
-            #             FROM staging.opera_positions_last_year
-            #             WHERE tag = 'LY_data_{last_year}'
-            #         """
-            # print(last_year_query)
-            # with self.source.connect() as conn:
-            #     last_year_df = pd.read_sql_query(text(last_year_query), conn)
-            # df = pd.concat([df, last_year_df], axis=0)
         return df
 
     @staticmethod
@@ -141,7 +129,7 @@ class DerivativesPositionLoader(PositionLoader):
         if cc_num_match:
             return f"CENTRAL {cc_num_match.group(1)}"
 
-        if portfolio.x('CC_SP'):
+        if portfolio.startswith('CC_SP'):
             return 'SPREADS'
 
         if portfolio == 'CC_BK':
@@ -450,7 +438,6 @@ class DerivativesPositionLoader(PositionLoader):
 
         # Prepare query values
         position_df['cob_date'] = pd.to_datetime(position_df['cob_date'], errors='coerce')
-        #TODO Due to LY data tag for for rubber, need to split by cob_date. For 2024-12-31/2025-01-01, opera sensitivity no longer available, but this will be for 2025-12-31/2026-01-01
         cob_dates = position_df['cob_date'].dt.strftime('%Y-%m-%d').unique()
         security_ids = position_df['security_id'].unique()
         opera_product = product_map[product]

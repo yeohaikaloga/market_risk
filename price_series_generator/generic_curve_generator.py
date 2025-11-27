@@ -55,7 +55,7 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             self._contract_roll_dates = roll_dates_adj
 
     def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = None,
-                               usd_conversion_mode: str = None, fx_df: pd.DataFrame = None,
+                               usd_conversion_mode: str = None, forex_mode: str = None, fx_spot_df: pd.DataFrame = None,
                                cob_date: str = None) -> pd.DataFrame:
         """
         Generate the N-th generic futures curve with optional early rolling and backward adjustment.
@@ -83,10 +83,9 @@ class GenericCurveGenerator(PriceSeriesGenerator):
 
         self._prepare_curve_inputs(roll_days)
         df = self.df.copy()
-        df = df.interpolate(method='linear', limit_direction='both', axis=0) #interpolate on raw price first
 
         if usd_conversion_mode == 'pre':
-            if fx_df is None:
+            if fx_spot_df is None:
                 raise ValueError("fx_rates DataFrame must be provided for USD conversion")
 
             # Identify currency of the instrument from the futures contract
@@ -95,9 +94,20 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                 pass  # already USD
             else:
                 fx_rate = 'USD' + instrument_currency.upper()
-                if fx_rate not in fx_df.columns:
+                if fx_rate not in fx_spot_df.columns:
                     raise ValueError(f"FX rates for {fx_rate} not found in fx_rates DataFrame")
-                df = df.div(fx_df[fx_rate], axis=0)
+
+                if forex_mode == 'cob_date_fx':
+                    fx_rate = fx_spot_df.at[cob_date, fx_rate]
+                    df = df.div(fx_rate, axis=0)
+
+                elif forex_mode == 'daily_fx':
+                    df = df.div(fx_spot_df[fx_rate], axis=0)
+
+                else:
+                    raise ValueError(f"forex mode for {forex_mode} not found in.")
+
+        df = df.interpolate(method='linear', limit_direction='both', axis=0)  # interpolate after forex
 
         contracts = df.columns.tolist()
         print('columns:', contracts)
@@ -196,8 +206,8 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             generic_curve['adjustment_values'] = pd.NA
 
         if usd_conversion_mode == 'post':
-            if fx_df is None:
-                raise ValueError("fx_df DataFrame must be provided for USD conversion")
+            if fx_spot_df is None:
+                raise ValueError("fx_spot_df DataFrame must be provided for USD conversion")
 
             if cob_date is None:
                 raise ValueError("cob_date must be provided for post USD conversion")
@@ -209,16 +219,24 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                 generic_curve['final_price_USD'] = generic_curve['final_price']
             else:
                 fx_rate = 'USD' + instrument_currency.upper()
-                if fx_rate not in fx_df.columns:
-                    raise ValueError(f"FX rates for {fx_rate} not found in fx_df")
+                if fx_rate not in fx_spot_df.columns:
+                    raise ValueError(f"FX rates for {fx_rate} not found in fx_spot_df")
 
                 # Use only the FX rate on cob_date
-                if cob_date not in fx_df.index:
-                    raise ValueError(f"COB date {cob_date} not found in fx_df index")
+                if cob_date not in fx_spot_df.index:
+                    raise ValueError(f"COB date {cob_date} not found in fx_spot_df index")
 
-                fx_rate = fx_df.at[cob_date, fx_rate]
-                generic_curve['fx_rate'] = fx_rate
-                generic_curve['final_price_USD'] = generic_curve['final_price'] / generic_curve['fx_rate']
+                if forex_mode == 'cob_date_fx':
+                    fx_rate = fx_spot_df.at[cob_date, fx_rate]
+                    generic_curve['fx_rate'] = fx_rate
+
+                elif forex_mode == 'daily_fx':
+                    generic_curve['fx_rate'] = fx_spot_df[fx_rate]
+
+                else:
+                    raise ValueError(f"forex mode for {forex_mode} not found in.")
+
+                generic_curve['final_price_USD'] = generic_curve['final_price'].div(generic_curve['fx_rate'], axis=0)
         else:
             generic_curve['final_price_USD'] = generic_curve['final_price']
 
@@ -228,8 +246,9 @@ class GenericCurveGenerator(PriceSeriesGenerator):
 
     def generate_generic_curves_df_up_to(self, max_position: int, roll_days: int = 14,
                                          adjustment: str = None, label_prefix: str = '',
-                                         usd_conversion_mode: str = None, fx_df: pd.DataFrame = None,
-                                         cob_date: str = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+                                         usd_conversion_mode: str = None, forex_mode: str = None,
+                                         fx_spot_df = pd.DataFrame, cob_date: str = None) -> (
+            tuple)[pd.DataFrame, pd.DataFrame]:
         """
 
         Generate and combine multiple generic curves (e.g., G1, G2, G3...) into one DataFrame.
@@ -253,7 +272,8 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                                                 roll_days=roll_days,
                                                 adjustment=adjustment,
                                                 usd_conversion_mode=usd_conversion_mode,
-                                                fx_df=fx_df,
+                                                forex_mode=forex_mode,
+                                                fx_spot_df=fx_spot_df,
                                                 cob_date=cob_date)
             if len(label_prefix) == 1:
                 label_prefix = label_prefix + ' '

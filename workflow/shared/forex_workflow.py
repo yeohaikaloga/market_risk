@@ -10,28 +10,32 @@ def load_forex(cob_date, window):
     days_list = get_prev_biz_days_list(cob_date, window + 1)
     fx = ForexRefLoader(source=uat_engine)
     usd_ccy = ['USD']
-    quote_ccy = ['EUR', 'GBP', 'BRL', 'MYR', 'AUD', 'MXN', 'COP', 'NZD', 'CNH', 'CNY', 'THB', 'IDR', 'JPY', 'INR']
+    quote_ccy = ['BRL', 'MYR', 'MXN', 'COP', 'CNH', 'CNY', 'THB', 'IDR', 'JPY', 'INR', 'CAD']
     base_ccy = ['EUR', 'GBP', 'AUD', 'NZD']
     fwd_mon = 'NULL'
+    type = 'CMPL'
 
     #USD as base
     fx.load_metadata(
+        type=type,
         base_ccy=usd_ccy,
         quote_ccy=quote_ccy,
-        fwd_mon=fwd_mon
+        fwd_mon=fwd_mon,
     )
 
     fx_usd_base_price_loader = ForexPriceLoader(source=uat_engine, ref_loader=fx)
     fx_usd_base_df = fx_usd_base_price_loader.load_prices(
         start_date=days_list[0],
-        end_date=cob_date
+        end_date=cob_date,
+        type=type
     )
 
     #USD as quote
     fx.load_metadata(
+        type=type,
         base_ccy=base_ccy,
         quote_ccy=usd_ccy,
-        fwd_mon=fwd_mon
+        fwd_mon=fwd_mon,
     )
 
     fx_usd_quote_price_loader = ForexPriceLoader(source=uat_engine, ref_loader=fx)
