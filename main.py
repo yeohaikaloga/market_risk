@@ -84,5 +84,6 @@ if __name__ == '__main__':
     # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
     #                             calculation_method=calculation_method, window=window,
     #                             with_price_var=False, write_to_excel=True)
+    ###TEST
 
 
