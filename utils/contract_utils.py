@@ -77,6 +77,7 @@ def extract_instrument_from_product_code(product_code: str, ref_dict: dict) -> s
     else:
         return product_code
 
+
 instrument_ref_dict = load_instrument_ref_dict('uat')
 instrument_list = [
     extract_instrument_from_product_code(pc, instrument_ref_dict)
@@ -96,7 +97,13 @@ product_specifications = {'cotton': {'instrument_list': ['CT', 'VV', 'AVY', 'C',
                                                       'SH', 'VPC', 'QS', 'THE', 'HO', 'MDS', 'DA', 'BDR', 'KFP', 'LC',
                                                       'FC', 'LS', 'CO', 'CL', 'EN', 'XB', 'NG'],
                                   'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'daily_fx'},
-                                  'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}}}
+                                  'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}},
+                          'biocane': {'instrument_list': None,
+                                      'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'},
+                                      'mc_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}},
+                          'wood': {'instrument_list': None,
+                                   'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'},
+                                   'mc_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}}}
 
 done = ['KC', 'DF', 'CC', 'QC', 'CT', 'SB', 'QW', 'S', 'SM', 'BO', 'C',
                                                       'W', 'KW', 'MW', 'IJ', 'RS', 'CRD', 'AX', 'KO', 'OR',

@@ -55,6 +55,7 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     pnl_matrix = pnl_matrix.mul(combined_pos_df["cob_date_price"].values, axis=0)
     pnl_matrix = pnl_matrix.mul(combined_pos_df["delta"].values, axis=0)
     pnl_matrix = pnl_matrix.mul(combined_pos_df["to_USD_conversion"].values, axis=0)
+    pnl_matrix = pnl_matrix.div(combined_pos_df["cob_date_fx"].values, axis=0)
 
     # ------------------------------------------------------------------
     # 5. ADD REAL position_index AS A COLUMN

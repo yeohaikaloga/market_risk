@@ -9,8 +9,8 @@ crop_dict = {'Brazilian': {'grade': 'M_1-1/8"_std', 'type': None, 'product_name'
              'Memphis/Orleans/Texas': {'grade': 'M_1-1/8"_std', 'type': 'MOT', 'product_name': 'Cotton'},
              'A Index': {'grade': 'M_1-1/8"_std', 'type': 'A Index', 'product_name': 'Cotton'}}
 
-wood_dict = {'France_DKD_Sapele': {'origin': 'France', 'grade': 'Sapele', 'type': 'DKD', 'instrument_id': 4342,
-                                   'product_name': 'wood'},
+wood_series_dict = {'France_DKD_Sapele': {'origin': 'France', 'grade': 'Sapele', 'type': 'DKD', 'instrument_id': 4342,
+                                          'product_name': 'Wood'},
              'Netherlands_FKD_Sapelli': {'origin': 'Netherlands', 'grade': 'Sapelli', 'type': 'FKD',
                                          'instrument_id': 4341, 'product_name': 'Wood'}}
 
@@ -24,7 +24,7 @@ class PhysicalContractRefLoader(ContractRefLoader):
         self.origin = self.params.get("origin")
         self.type = self.params.get("type")
         self.crop_year_type = None
-        self.data_source = self.params.get("data_source") #, "cotlook")
+        self.data_source = self.params.get("data_source")
         self.instrument_id = self.params.get("instrument_id")
         self.product_name = self.params.get("product_name")
 
@@ -32,69 +32,58 @@ class PhysicalContractRefLoader(ContractRefLoader):
         self.crop_year_type = 'cross' if '/' in crop_year else 'straight'
 
     def load_ref_data(self) -> pd.DataFrame:
-        product_name_filter = f"p.name = '{self.product_name}'"
         if self.product_name == 'Cotton':
+
             if self.instrument_name == 'A Index':
                 external_name_filter = "pc.external_name LIKE '%A Index'"  # match variants like '2024/2025 A Index'
             else:
-                external_name_filter = f"pc.external_name = '{self.instrument_name}'"
+                external_name_filter = f"pc.external_name LIKE '%{self.instrument_name}%'"
+
+            query = f"""
+                        SELECT DISTINCT pc.external_name, pi.origin, pi.type, pi.grade, pi.crop_year
+                        FROM ref.physical_contract pc 
+                        JOIN market.physical_market_price pmp ON pc.traded_contract_id = pmp.traded_contract_id
+                        JOIN ref.physical_instrument pi ON pi.id = pc.instrument_id
+                        WHERE pmp.data_source = '{self.data_source}'
+                        AND {external_name_filter}
+                    """
+
+            if self.grade:
+                query += f" AND pi.grade = '{self.grade}'"
+            if self.origin:
+                query += f" AND pi.origin = '{self.origin}'"
+            if self.type:
+                query += f" AND pi.type = '{self.type}'"
+
+            query += " LIMIT 5"
+            print(query)
+
         elif self.product_name == 'Wood':
-            pass
-        query = f"""
+            self.instrument_id = wood_series_dict[self.instrument_name]['instrument_id']
+
+            query = f"""
                     SELECT DISTINCT pc.external_name, pi.origin, pi.type, pi.grade, pi.crop_year
                     FROM ref.physical_contract pc 
                     JOIN market.physical_market_price pmp ON pc.traded_contract_id = pmp.traded_contract_id
                     JOIN ref.physical_instrument pi ON pi.id = pc.instrument_id
-                    WHERE pmp.data_source = '{self.data_source}'
-                      AND {external_name_filter}
-                      AND {product_name_filter}
-                """
-
-        if self.grade:
-            query += f" AND pi.grade = '{self.grade}'"
-        if self.origin:
-            query += f" AND pi.origin = '{self.origin}'"
-        if self.type:
-            query += f" AND pi.type = '{self.type}'"
-
-        query += " LIMIT 5"
-
+                    WHERE instrument_id = {self.instrument_id}
+                    """
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn)
+        print(df.head())
 
         if not df.empty:
             row = df.iloc[0]
-            self.origin = row['origin']
-            self.grade = row['grade']
-            self.type = row['type']
-            self.determine_crop_year_type(row['crop_year'])
+            self.params['origin'] = row['origin']
+            self.params['grade'] = row['grade']
+            self.params['type'] = row['type']
+            if self.product_name == 'Cotton':
+                self.params['crop_year_type'] = 'cross' if '/' in row['crop_year'] else 'straight'
+            else:
+                self.params['crop_year_type'] = None
+            self.params['external_name'] = row['external_name']
+            self.params['instrument_id'] = self.instrument_id
+            self.params['instrument_name'] = self.instrument_name
+            self.params['product_name'] = self.product_name
 
         return df
-
-    def load_contracts(self):
-        query = f"""
-            SELECT pc.external_name, pc.shipment_month, pi.grade, pi.origin, pmp.tdate
-            FROM ref.physical_contract pc 
-            JOIN market.physical_market_price pmp 
-            ON pc.traded_contract_id = pmp.traded_contract_id
-            JOIN ref.physical_instrument pi 
-            ON pi.id = pc.instrument_id
-            WHERE pc.external_name = '{self.instrument_name}'
-        """
-        if self.grade:
-            query += f" AND pi.grade = '{self.grade}'"
-        if self.origin:
-            query += f" AND pi.origin = '{self.origin}'"
-
-        with self.source.connect() as conn:
-            df = pd.read_sql_query(text(query), conn)
-
-        df['tdate'] = pd.to_datetime(df['tdate'], errors='coerce')
-        return df
-
-    def load_expiry_dates(self, start_date, end_date):
-        """Load list of expiry dates for active contracts for the contract_ref_loader within a date range."""
-        pass
-
-    def load_shipment_month(self):
-        pass

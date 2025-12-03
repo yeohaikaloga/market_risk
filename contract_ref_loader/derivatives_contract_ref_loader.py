@@ -20,30 +20,30 @@ class DerivativesContractRefLoader(ContractRefLoader):
 
         # Load holiday calendar
         from utils.date_utils import load_opera_market_calendar
-        self.holiday_calendar = load_opera_market_calendar(instrument_name)
+        self.holiday_calendar = load_opera_market_calendar(instrument_name.strip())
 
         # Find all keys with matching Bloomberg code
         matched_keys = [key for key, ref in instrument_ref_dict.items()
-                        if ref.get("bbg_product_code") == instrument_name]
+                        if ref.get("bbg_product_code") == instrument_name.strip()]
 
         if not matched_keys:
             raise ValueError(
-                f"Instrument '{instrument_name}' not found in instrument_ref_dict."
+                f"Instrument '{instrument_name.strip()}' not found in instrument_ref_dict."
             )
 
         # Prefer keys that end with the instrument_name
-        exact_match_keys = [k for k in matched_keys if k.endswith(instrument_name)]
+        exact_match_keys = [k for k in matched_keys if k.endswith(instrument_name.strip())]
         if exact_match_keys:
             # Pick the shortest key if multiple exact matches exist
             matched_key = min(exact_match_keys, key=len)
         else:
             # fallback to first match
-            matched_key = matched_keys[0]
+            matched_key = min(matched_keys, key=len)
 
         # Print if multiple keys matched
         if len(matched_keys) > 1:
             print(
-                f"WARNING: Multiple product_codes matched for Bloomberg code '{instrument_name}': "
+                f"WARNING: Multiple product_codes matched for Bloomberg code '{instrument_name.strip()}': "
                 f"{matched_keys}. Selected '{matched_key}'."
             )
 

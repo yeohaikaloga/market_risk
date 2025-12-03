@@ -49,5 +49,9 @@ def load_forex(cob_date, window):
 
     fx_spot_df = pd.concat([fx_usd_base_df, fx_usd_quote_df], axis=1)
 
+    usdusd_series = pd.Series(1.0, index=fx_spot_df.index, name='USDUSD')
+    fx_spot_df['USDUSD'] = usdusd_series
+
+    fx_spot_df = fx_spot_df.sort_index(axis=1)
     print(fx_spot_df.tail())
     return fx_spot_df

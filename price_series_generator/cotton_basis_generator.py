@@ -95,7 +95,7 @@ class CottonBasisGenerator(PriceSeriesGenerator):
             full_contract_name = contract + ' Comdty'
             contract_expiry = self.contract_expiry_dates[full_contract_name]
             for crop_year in crop_price_df_by_year.columns:
-                if physical_contract.crop_year_type == 'cross':
+                if physical_contract.params.get("crop_year_type") == 'cross':
                     ref_year, ref_next_year = map(int, crop_year.split("/"))
                 else:
                     ref_year = int(crop_year)

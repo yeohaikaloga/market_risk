@@ -99,7 +99,7 @@ def load_opera_market_calendar(instrument: Union[str, list]) -> pd.DataFrame:
 
     # Convert instrument into SQL filter
     if isinstance(instrument, str):
-        instr_filter = f"'{instrument}'"
+        instr_filter = f"'{instrument.strip()}'"
     elif isinstance(instrument, list) and instrument:
         instr_filter = ", ".join(f"'{i}'" for i in instrument)
     else:
@@ -124,7 +124,7 @@ def load_opera_market_calendar(instrument: Union[str, list]) -> pd.DataFrame:
     unique_products = df["product_code"].unique()
 
     if len(unique_products) == 0:
-        raise ValueError("No holiday calendar data found for given instrument(s).")
+        raise ValueError(f"No holiday calendar data found for given instrument(s): {unique_products}.")
 
     if len(unique_products) > 1:
         raise ValueError(

@@ -6,7 +6,8 @@ from position_loader.derivatives_position_loader import DerivativesPositionLoade
 from utils.contract_utils import (load_instrument_ref_dict, extract_instrument_from_product_code)
 from utils.log_utils import get_logger
 
-def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any]) -> pd.DataFrame:
+def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any], prices_df: pd.DataFrame,
+                                   fx_spot_df: pd.DataFrame) -> pd.DataFrame:
     logger = get_logger(__name__)
     uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
     product = 'rms'

@@ -11,7 +11,8 @@ from position_loader.physical_position_loader import fy24_unit_to_cotlook_basis_
 from utils.position_utils import calculate_phys_derivs_aggs, calculate_basis_adj_and_basis_pos
 from utils.log_utils import get_logger
 
-def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, Any], prices_df: pd.DataFrame) -> pd.DataFrame:
+def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, Any], prices_df: pd.DataFrame,
+                                      fx_spot_df: pd.DataFrame) -> pd.DataFrame:
     """
     STEP 2: Generate combined physical + derivatives position DataFrame for cotton.
 
@@ -103,6 +104,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     phy_grouped_pos_df['trader_name'] = None
     phy_grouped_pos_df['counterparty_id'] = 0
     phy_grouped_pos_df['counterparty_parent'] = None
+    phy_grouped_pos_df['currency'] = np.where(phy_grouped_pos_df['product_code'] == 'EX GIN S6', 'INR', 'USD')
 
     # Add conversion of physicals from c/lbs to USD/MT
     phy_grouped_pos_df['to_USD_conversion'] = phy_grouped_pos_df.apply(
@@ -135,7 +137,8 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
                 'exposure': 'OUTRIGHT',
                 'position_type': 'DIFF PHYS',
                 'delta': row['delta'],
-                'to_USD_conversion': instrument_ref_dict['CM CCL']['to_USD_conversion']
+                'to_USD_conversion': instrument_ref_dict['CM CCL']['to_USD_conversion'],
+                'currency': 'INR'
             })
 
             # DERIVATIVES LEG
@@ -145,7 +148,8 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
                 'exposure': 'OUTRIGHT',
                 'position_type': 'DERIVS',
                 'delta': -row['delta'],  # negated
-                'to_USD_conversion': instrument_ref_dict['CM CCL']['to_USD_conversion']
+                'to_USD_conversion': instrument_ref_dict['CM CCL']['to_USD_conversion'],
+                'currency': 'USD'
             })
             both_india_legs_df = pd.DataFrame([phys_leg, derivs_leg])
             india_pos_df = pd.concat([india_pos_df, both_india_legs_df], ignore_index=True)
@@ -164,6 +168,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     outright_phy_pos_df = physical_loader.assign_bbg_tickers(outright_phy_pos_df, instrument_dict)
     outright_phy_pos_df = physical_loader.assign_generic_curves(outright_phy_pos_df, instrument_dict)
     outright_phy_pos_df = physical_loader.assign_cob_date_price(outright_phy_pos_df, prices_df, cob_date)
+    outright_phy_pos_df = physical_loader.assign_cob_date_fx(outright_phy_pos_df, fx_spot_df, cob_date)
 
     basis_phy_pos_df['instrument_name'] = (
         basis_phy_pos_df['product_code']
@@ -174,6 +179,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     basis_phy_pos_df = physical_loader.assign_generic_curves(basis_phy_pos_df, instrument_dict) # for MC VaR
     basis_phy_pos_df['cob_date_price'] = 1
     basis_phy_pos_df = physical_loader.assign_basis_series(basis_phy_pos_df, fy24_unit_to_cotlook_basis_origin_dict)
+    basis_phy_pos_df['cob_date_fx'] = 1
     # Create unit-region mapping for derivatives
     cotton_unit_region_mapping = dict(zip(conso_pos_df['unit'], conso_pos_df['region']))
     logger.info("STEP 2F completed")
@@ -233,6 +239,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
             deriv_pos_df['settle_delta_1'] *
             deriv_pos_df['lots_to_MT_conversion']
         )
+        deriv_pos_df['cob_date_fx'] = 1
     logger.info("STEP 2G completed")
 
     # Step 2H: Combine all positions

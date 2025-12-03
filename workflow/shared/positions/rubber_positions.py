@@ -8,7 +8,8 @@ from utils.contract_utils import (load_instrument_ref_dict, month_codes, extract
 from utils.position_utils import calculate_phys_derivs_aggs, calculate_basis_adj_and_basis_pos
 from utils.log_utils import get_logger
 
-def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, Any], prices_df: pd.DataFrame) -> pd.DataFrame:
+def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, Any], prices_df: pd.DataFrame,
+                                      fx_spot_df: pd.DataFrame) -> pd.DataFrame:
     logger = get_logger(__name__)
     uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
     product = 'rubber'
@@ -27,6 +28,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     conso_pos_df['quantity'] = pd.to_numeric(conso_pos_df['quantity'], errors='coerce')
     conso_pos_df['transaction type'] = 'PHYS'
     conso_pos_df['purchases type'] = conso_pos_df['purchases type'].astype(str).str.upper()
+    # TODO China manual adjustment needs to be labelled for purchases type
     conso_pos_df['purchases type'] = conso_pos_df['purchases type'].str.replace('PURCHASES', 'PURCHASE')
     conso_pos_df['typ'] = conso_pos_df['trade type'] + ' ' + conso_pos_df['purchases type']
 
@@ -58,6 +60,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
         'VIETN TRAD': 'VIETNAM',
     }
     conso_pos_df['unit'] = conso_pos_df['portfolio']
+    conso_pos_df['terminal_month'] = pd.to_datetime(conso_pos_df['terminal_month'], errors='coerce')
     conso_pos_df['region'] = conso_pos_df['unit'].map(rubber_unit_region_mapping)
     def adjusted_delta(product_type, delta_quantity):
         if product_type == 'PRIMARY PR':
@@ -77,10 +80,11 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
 
     # Step 2B: Classify position types
     pos_type_conditions = [
-        conso_pos_df['typ'].isin(['FIXED PURCHASE', 'FIXED SALES', 'FIXED STOCK']),
+        conso_pos_df['typ'].isin(['FIXED PURCHASE', 'FIXED SALES', 'FIXED STOCK', 'FIXED NONE']),
         conso_pos_df['typ'].isin(['DIFF PURCHASE', 'DIFF SALES']),
         conso_pos_df['typ'].isin(['FUTURES', 'LONG CALLS', 'SHORT CALLS', 'LONG PUTS', 'SHORT PUTS'])
     ]
+
     pos_type_values = ['FIXED PHYS', 'DIFF PHYS', 'DERIVS']
     conso_pos_df['position_type'] = np.select(pos_type_conditions, pos_type_values, default='UNKNOWN')
     logger.info("STEP 2B completed")
@@ -118,17 +122,13 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     phy_grouped_pos_df['strike'] = np.nan
 
     # Split into basis and outright exposures: All physicals positions are basis; all fixed physical positions are outright
-    basis_phy_pos_df = phy_grouped_pos_df.copy()
-    basis_phy_pos_df['exposure'] = 'BASIS (NET PHYS)'
-
     outright_phy_pos_df = phy_grouped_pos_df[
-        phy_grouped_pos_df['typ'].isin(['FIXED PURCHASE', 'FIXED SALES', 'FIXED STOCK'])
+        phy_grouped_pos_df['typ'].isin(['FIXED PURCHASE', 'FIXED SALES', 'FIXED STOCK', 'FIXED NONE'])
     ].copy()
     outright_phy_pos_df['exposure'] = 'OUTRIGHT'
 
     # Assign Bloomberg tickers and generic curves
     #outright_phy_pos_df = physical_loader.assign_bbg_tickers(outright_phy_pos_df, instrument_dict)
-    outright_phy_pos_df['terminal_month'] = pd.to_datetime(outright_phy_pos_df['terminal_month'], errors='coerce')
     outright_phy_pos_df['bbg_ticker'] = outright_phy_pos_df.apply(
         lambda row: (
                 row['product_code']
@@ -148,6 +148,11 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     outright_phy_pos_df['to_USD_conversion'] = outright_phy_pos_df['product_code'].map(
         lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
     )
+    outright_phy_pos_df['currency'] = 'USD'
+    outright_phy_pos_df['cob_date_fx'] = 1
+
+    basis_phy_pos_df = phy_grouped_pos_df.copy()
+    basis_phy_pos_df['exposure'] = 'BASIS (NET PHYS)'
     basis_phy_pos_df['instrument_name'] = (
         basis_phy_pos_df['product_code']
         .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
@@ -169,6 +174,8 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     basis_phy_pos_df['underlying_bbg_ticker'] = basis_phy_pos_df['bbg_ticker']
     basis_phy_pos_df = physical_loader.assign_generic_curves(basis_phy_pos_df, instrument_dict)  # for MC VaR
     basis_phy_pos_df['cob_date_price'] = 1
+    basis_phy_pos_df['currency'] = 'USD'
+    basis_phy_pos_df['cob_date_fx'] = 1
 
     logger.info("STEP 2E completed")
 
@@ -226,7 +233,9 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
                 deriv_pos_df['total_active_lots'] *
                 deriv_pos_df['settle_delta_1'] *
                 deriv_pos_df['lots_to_MT_conversion']
-    )
+        )
+        deriv_pos_df['currency'] = 'USD'
+        deriv_pos_df['cob_date_fx'] = 1
     logger.info("STEP 2F completed")
 
     # Step 2G: Combine all positions

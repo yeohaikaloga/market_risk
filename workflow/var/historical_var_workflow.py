@@ -4,13 +4,13 @@ from workflow.shared.pnl_calculator_workflow import generate_pnl_vectors, analyz
 from workflow.var.var_generator_workflow import (generate_var, build_var_report, build_cotton_var_report_exceptions,
                                                  build_cotton_price_var_report_exceptions,
                                                  build_rubber_var_report_exceptions)
-import pickle
 import pandas as pd
 import os
 from datetime import datetime
-from utils.log_utils import get_logger
+from utils.log_utils import get_logger, save_to_pickle, load_from_pickle
 
-def historical_var_workflow(cob_date: str, product: str, simulation_method: str, calculation_method: str, window: int, with_price_var: bool, write_to_excel: bool):
+def historical_var_workflow(cob_date: str, product: str, simulation_method: str, calculation_method: str, window: int,
+                            with_price_var: bool, write_to_excel: bool):
     logger = get_logger(__name__)
     logger.info(f"Running historical VaR workflow for product: {product}, COB: {cob_date}, "
                 f"Simulation Method: {simulation_method}, Calculation Method: {calculation_method}, Window: {window}")
@@ -18,11 +18,21 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
     filename = f"{cob_date}_{product[:3]}_{simulation_method}_{calculation_method}_var_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     # === STEP 1: Prepare Market Data ===
-    prices_df, returns_df, instrument_dict = build_product_prices_returns_dfs(cob_date, product, window, simulation_method)
+    prices_df, returns_df, fx_spot_df, instrument_dict = build_product_prices_returns_dfs(cob_date, product, window,
+                                                                                          simulation_method)
+    save_to_pickle(prices_df, 'prices.pkl')
+    save_to_pickle(returns_df, 'returns.pkl')
+    save_to_pickle(fx_spot_df, 'fx_spot.pkl')
+    save_to_pickle(instrument_dict, 'instrument_dict.pkl')
     logger.info("STEP 1: Market data prepared")
 
+    prices_df = load_from_pickle('prices.pkl')
+    returns_df = load_from_pickle('returns.pkl')
+    fx_spot_df = load_from_pickle('fx_spot.pkl')
+    instrument_dict = load_from_pickle('instrument_dict.pkl')
+
     # === STEP 2: Prepare Positions Data ===
-    combined_pos_df = build_combined_position(cob_date, product, instrument_dict, prices_df)
+    combined_pos_df = build_combined_position(cob_date, product, instrument_dict, prices_df, fx_spot_df)
     logger.info("STEP 2: Position data prepared")
 
     combined_pos_df = prepare_positions_data_for_var(
@@ -34,10 +44,17 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
 
     if with_price_var:
         combined_price_pos_df = combined_pos_df[combined_pos_df['book'] == 'PRICE']
+        save_to_pickle(combined_price_pos_df, 'combined_price_pos.pkl')
+        combined_price_pos_df = load_from_pickle('combined_price_pos.pkl')
         logger.info("STEP 2-2: Price position data prepared")
 
+    save_to_pickle(combined_pos_df, 'combined_pos.pkl')
+    combined_pos_df = load_from_pickle('combined_pos.pkl')
+
+
     # === STEP 3: Generate PnL Vectors ===
-    if calculation_method == 'linear' or calculation_method == 'sentivity_matrix' or calculation_method == 'taylor_series':
+    if (calculation_method == 'linear' or calculation_method == 'sensitivity_matrix'
+            or calculation_method == 'taylor_series'):
         long_pnl_df = generate_pnl_vectors(
             combined_pos_df=combined_pos_df,
             returns_df=returns_df,
@@ -54,26 +71,8 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
         logger.info("STEP 3: PnL prepared")
     else:
         raise NotImplementedError(f"Method '{calculation_method}' not supported yet.")
-    # #
-    combined_pos_df.to_pickle('combined_pos_df.pkl')
-    long_pnl_df.to_pickle('long_pnl_df.pkl')
 
-    f = open('combined_pos_df.pkl', 'wb')
-    pickle.dump(combined_pos_df, f)
-    f.close()
 
-    f = open('combined_pos_df.pkl', 'rb')
-    combined_pos_df = pickle.load(f)
-    f.close()
-
-    f = open('long_pnl_df.pkl', 'wb')
-    pickle.dump(long_pnl_df, f)
-    f.close()
-
-    f = open('long_pnl_df.pkl', 'rb')
-    long_pnl_df = pickle.load(f)
-    f.close()
-    #
 
     analyze_and_export_unit_pnl(
         product=product,
@@ -140,7 +139,5 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
             if with_price_var:
                 price_var_report_df.to_excel(writer, sheet_name='price_var', index=True)
 
-    #TODO to write report formatter function, and subsequently, create email with to/cc/bcc list.
+    # TODO to write report formatter function, and subsequently, create email with to/cc/bcc list.
     logger.info("STEP 6: VaR report exported")
-
-

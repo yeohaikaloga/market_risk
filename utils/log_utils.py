@@ -1,30 +1,31 @@
 import logging
 import sys
+import pickle
 
 
-def get_logger(name: str, level: int = logging.INFO) -> logging.Logger:
-    """
-    Returns a configured logger instance.
-
-    Args:
-        name: Logger name (usually __name__ from the calling module)
-        level: Logging level (default: INFO)
-
-    Returns:
-        logging.Logger
-    """
+def get_logger(name: str, level=logging.INFO):
+    """Standard logger setup."""
     logger = logging.getLogger(name)
-    if not logger.handlers:  # Avoid adding multiple handlers if called multiple times
-        logger.setLevel(level)
 
+    if not logger.handlers:
+        logger.setLevel(level)
         formatter = logging.Formatter(
             fmt="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
-
-        # StreamHandler to print to stdout
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
     return logger
+
+def save_to_pickle(data, filename: str):
+    """Saves data to a pickle file."""
+    with open(filename, 'wb') as f:
+        pickle.dump(data, f)
+
+def load_from_pickle(filename: str):
+    """Loads data from a pickle file."""
+    with open(filename, 'rb') as f:
+        data = pickle.load(f)
+    return data
