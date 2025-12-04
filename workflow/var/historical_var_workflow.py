@@ -1,5 +1,5 @@
 from workflow.shared.positions.positions_workflow import build_combined_position, prepare_positions_data_for_var
-from workflow.shared.market_data.market_data_workflow import build_product_prices_returns_dfs
+from workflow.shared.market_data.market_data_workflow import build_product_prices_returns_dfs_for_hist_sim
 from workflow.shared.pnl_calculator_workflow import generate_pnl_vectors, analyze_and_export_unit_pnl
 from workflow.var.var_generator_workflow import (generate_var, build_var_report, build_cotton_var_report_exceptions,
                                                  build_cotton_price_var_report_exceptions,
@@ -18,8 +18,8 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
     filename = f"{cob_date}_{product[:3]}_{simulation_method}_{calculation_method}_var_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     # === STEP 1: Prepare Market Data ===
-    prices_df, returns_df, fx_spot_df, instrument_dict = build_product_prices_returns_dfs(cob_date, product, window,
-                                                                                          simulation_method)
+    prices_df, returns_df, fx_spot_df, instrument_dict = build_product_prices_returns_dfs_for_hist_sim(cob_date, product, window,
+                                                                                                       simulation_method)
     save_to_pickle(prices_df, 'prices.pkl')
     save_to_pickle(returns_df, 'returns.pkl')
     save_to_pickle(fx_spot_df, 'fx_spot.pkl')
@@ -37,7 +37,8 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
 
     combined_pos_df = prepare_positions_data_for_var(
         combined_pos_df=combined_pos_df,
-        method=calculation_method,
+        simulation_method=simulation_method,
+        calculation_method=calculation_method,
         trader=False,
         counterparty=False)
     logger.info("STEP 2-1: Main position data prepared")

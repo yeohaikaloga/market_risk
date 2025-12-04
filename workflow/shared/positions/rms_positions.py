@@ -66,6 +66,7 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
             deriv_pos_df['product_code']
             .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
         )
+
         # Add conversions
         deriv_pos_df['to_USD_conversion'] = deriv_pos_df['product_code'].map(
             lambda x: instrument_ref_dict.get(x, {}).get('to_USD_conversion', np.nan)
@@ -96,6 +97,8 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
                 deriv_pos_df['total_active_lots'] *
                 deriv_pos_df['settle_theta'] * 5/7
         )
+        deriv_pos_df = derivatives_loader.assign_cob_date_price(deriv_pos_df, prices_df, cob_date)
+        deriv_pos_df['cob_date_fx'] = 1
     logger.info("STEP 2B completed")
 
     # Step 2C: Combine all positions

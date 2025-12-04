@@ -1,6 +1,7 @@
 import pandas as pd
 import traceback
 from workflow.var.historical_var_workflow import historical_var_workflow
+from workflow.var.monte_carlo_var_workflow import monte_carlo_var_workflow
 
 from position_loader.physical_position_loader import PhysicalPositionLoader
 from contract_ref_loader.derivatives_contract_ref_loader import DerivativesContractRefLoader
@@ -55,16 +56,20 @@ if __name__ == '__main__':
 
 
         #### THIS IS FOR COTTON VAR
-        # cob_date = '2025-11-06'
-        # # Sensitivity report not cleaned up for 2025-11-06
-        # # Note: Greeks in DB only start from 20 Aug 2025
-        # product = 'cotton'
-        # simulation_method = 'hist_sim'
-        # calculation_method = 'linear'
-        # window = 260
+        cob_date = '2025-11-06'
+        # Sensitivity report not cleaned up for 2025-11-06
+        # Note: Greeks in DB only start from 20 Aug 2025
+        product = 'cotton'
+        simulation_method = 'hist_sim'
+        calculation_method = 'linear'
+        window = 260
         # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
         #                             calculation_method=calculation_method, window=window,
         #                             with_price_var=True, write_to_excel=True)
+        simulation_method = 'mc_sim'
+        monte_carlo_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+                                calculation_method=calculation_method, window=window,
+                                with_price_var=True, write_to_excel=True)
 
         #### THIS IS FOR RUBBER VAR
         # cob_date = '2025-11-21' # Only have ORS positions for 2025-10-31 and 2025-11-05, but no derivs for 2025-10-31.
@@ -78,15 +83,15 @@ if __name__ == '__main__':
         #                         with_price_var=False, write_to_excel=True)
 
         #### THIS IS FOR RMS VAR
-        product = 'rms'
-        cob_date = '2025-11-12'
-        simulation_method = 'hist_sim'
-        calculation_method = 'taylor_series'
-        window = 260
-
-        historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
-                                    calculation_method=calculation_method, window=window,
-                                    with_price_var=False, write_to_excel=True)
+        # product = 'rms'
+        # cob_date = '2025-11-28'
+        # simulation_method = 'hist_sim'
+        # calculation_method = 'taylor_series'
+        # window = 260
+        #
+        # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+        #                             calculation_method=calculation_method, window=window,
+        #                             with_price_var=False, write_to_excel=True)
         ## THIS IS FOR BIOCANE VAR
         # product = 'biocane'
         # cob_date = '2025-11-21'

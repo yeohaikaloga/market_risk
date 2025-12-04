@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from typing import Dict, Any
-import pickle
 
 # Core loaders and generators
 from contract_ref_loader.derivatives_contract_ref_loader import DerivativesContractRefLoader
@@ -44,11 +43,11 @@ def build_instrument_generic_curves(instrument_list: list, cob_date: str, window
         Dict[instrument_name, Dict[str, Any]] — structured market data per instrument
     """
     prod_engine = get_engine('prod')
-    days_list = get_prev_biz_days_list(cob_date, window + 1)
-
-    prices_df = pd.DataFrame()
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
+    returns_days_list = get_prev_biz_days_list(cob_date, window)
+    prices_df = pd.DataFrame(index=prices_days_list)
+    returns_df = pd.DataFrame(index=returns_days_list)
     # raw_prices_df = pd.DataFrame()
-    returns_df = pd.DataFrame()
     instrument_dict = {}
 
     for instrument_name in instrument_list:
@@ -76,10 +75,10 @@ def build_instrument_generic_curves(instrument_list: list, cob_date: str, window
             source=prod_engine
         )
         price_df = futures_price_loader.load_prices(
-            start_date=days_list[0],
+            start_date=prices_days_list[0],
             end_date=cob_date,
             contracts=futures_contracts,
-            reindex_dates=days_list,
+            reindex_dates=prices_days_list,
             instrument_name=instrument_name
         )
 
@@ -145,12 +144,16 @@ def build_ex_gin_s6_returns(cob_date: str, window: int, fx_spot_df: pd.DataFrame
     """
     # TODO Rewrite function after brought into prices master table
     uat_engine = get_engine('uat')
-    days_list = get_prev_biz_days_list(cob_date, window + 1)
+
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
     ex_gin_s6 = PhysicalPriceLoader(instrument_name='EX GIN S6', source=uat_engine)
-    ex_gin_s6_df = ex_gin_s6.load_ex_gin_s6_price_from_staging(start_date=days_list[0], end_date=cob_date)
+    ex_gin_s6_df = ex_gin_s6.load_ex_gin_s6_price_from_staging(start_date=prices_days_list[0], end_date=cob_date)
     ex_gin_s6_df['date'] = pd.to_datetime(ex_gin_s6_df['date'])
     ex_gin_s6_df = ex_gin_s6_df.set_index('date')[['price']].sort_index()
     ex_gin_s6_df = ex_gin_s6_df.rename(columns={'price': 'EX GIN S6'})
+    ex_gin_s6_df = ex_gin_s6_df.reindex(prices_days_list)
+    ex_gin_s6_df = ex_gin_s6_df.interpolate(method='linear', axis=0)
+    ex_gin_s6_df = ex_gin_s6_df.bfill().ffill()
     ex_gin_s6_relative_returns_df = relative_returns(ex_gin_s6_df)
     print(ex_gin_s6_df.tail())
     print(ex_gin_s6_df.loc[cob_date])
@@ -164,14 +167,13 @@ def build_garmmz_sugar_returns(cob_date: str, window: int, fx_spot_df: pd.DataFr
         -> tuple[pd.DataFrame, pd.DataFrame]:
     # TODO Rewrite function after brought into prices master table
     uat_engine = get_engine('uat')
-    biz_days = pd.DatetimeIndex(get_prev_biz_days_list(date=cob_date, no_of_days=window))
-    days_list = get_prev_biz_days_list(cob_date, window + 1)
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
     garmmz_sugar = PhysicalPriceLoader(instrument_name='GARMMZ SUGAR', source=uat_engine)
-    garmmz_sugar_df = garmmz_sugar.load_garmmz_sugar_price_from_staging(start_date=days_list[0], end_date=cob_date)
+    garmmz_sugar_df = garmmz_sugar.load_garmmz_sugar_price_from_staging(start_date=prices_days_list[0], end_date=cob_date)
     garmmz_sugar_df['date'] = pd.to_datetime(garmmz_sugar_df['date'])
     garmmz_sugar_df = garmmz_sugar_df.set_index('date')[['price']].sort_index()
     garmmz_sugar_df = garmmz_sugar_df.rename(columns={'price': 'GARMMZ SUGAR'})
-    garmmz_sugar_df = garmmz_sugar_df.reindex(biz_days)
+    garmmz_sugar_df = garmmz_sugar_df.reindex(prices_days_list)
     garmmz_sugar_df = garmmz_sugar_df.interpolate(method='linear', axis=0)
     garmmz_sugar_df = garmmz_sugar_df.bfill().ffill()
     garmmz_sugar_relative_returns_df = relative_returns(garmmz_sugar_df)
@@ -185,14 +187,13 @@ def build_garmmz_sugar_returns(cob_date: str, window: int, fx_spot_df: pd.DataFr
 def build_maize_up_returns(cob_date: str, window: int, fx_spot_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     # TODO Rewrite function after brought into prices master table
     uat_engine = get_engine('uat')
-    biz_days = pd.DatetimeIndex(get_prev_biz_days_list(date=cob_date, no_of_days=window))
-    days_list = get_prev_biz_days_list(cob_date, window + 1)
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
     maize_up = PhysicalPriceLoader(instrument_name='MAIZE UP', source=uat_engine)
-    maize_up_df = maize_up.load_maize_up_price_from_staging(start_date=days_list[0], end_date=cob_date)
+    maize_up_df = maize_up.load_maize_up_price_from_staging(start_date=prices_days_list[0], end_date=cob_date)
     maize_up_df['date'] = pd.to_datetime(maize_up_df['date'])
     maize_up_df = maize_up_df.set_index('date')[['price']].sort_index()
     maize_up_df = maize_up_df.rename(columns={'price': 'MAIZE UP'})
-    maize_up_df = maize_up_df.reindex(biz_days)
+    maize_up_df = maize_up_df.reindex(prices_days_list)
     maize_up_df = maize_up_df.interpolate(method='linear', axis=0)
     maize_up_df = maize_up_df.bfill().ffill()
     maize_up_relative_returns_df = relative_returns(maize_up_df)
@@ -205,8 +206,7 @@ def build_maize_up_returns(cob_date: str, window: int, fx_spot_df: pd.DataFrame)
 
 def build_cotlook_relative_returns(cob_date: str, window: int) -> dict:
     prod_engine = get_engine('prod')
-    biz_days = pd.DatetimeIndex(get_prev_biz_days_list(date=cob_date, no_of_days=window))
-    start_date = biz_days[0]
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
 
     cif_crops = ['Burkina Faso Bola/s', 'Brazilian', 'Ivory Coast Manbo/s', 'Mali Juli/s', 'Memphis/Orleans/Texas',
                  'A Index']
@@ -228,7 +228,7 @@ def build_cotlook_relative_returns(cob_date: str, window: int) -> dict:
             params=physical_contract.params
         )
         crop_price_df = crop_price.load_prices(
-            start_date=start_date,
+            start_date=prices_days_list[0],
             end_date=cob_date,
             data_source='cotlook',
             params=physical_contract.params
@@ -252,7 +252,7 @@ def build_cotlook_relative_returns(cob_date: str, window: int) -> dict:
                 if crop_year_start <= i <= crop_year_end:
                     stitched_crop_series.loc[i, instrument_name] = crop_price_df_by_year.loc[i, crop_year]
 
-        stitched_crop_series = stitched_crop_series.reindex(biz_days, method='ffill')
+        stitched_crop_series = stitched_crop_series.reindex(prices_days_list, method='ffill')
         stitched_crop_series = stitched_crop_series.interpolate(method='linear', limit_direction='both', axis=0)
 
         stitched_crop_series_relative_returns_df = relative_returns(stitched_crop_series)
@@ -266,8 +266,7 @@ def build_cotlook_relative_returns(cob_date: str, window: int) -> dict:
 
 def build_average_wood_returns(cob_date: str, window: int) -> dict:
     prod_engine = get_engine('prod')
-    biz_days = pd.DatetimeIndex(get_prev_biz_days_list(date=cob_date, no_of_days=window))
-    start_date = biz_days[0]
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
     wood_series = ['France_DKD_Sapele', 'Netherlands_FKD_Sapelli']
     wood_dict = {}
     all_wood_prices = []
@@ -290,7 +289,7 @@ def build_average_wood_returns(cob_date: str, window: int) -> dict:
             params=physical_contract.params
         )
         wood_price_df = wood_price.load_prices(
-            start_date=start_date,
+            start_date=prices_days_list[0],
             end_date=cob_date,
             data_source='BU',
             params=physical_contract.params
@@ -303,7 +302,7 @@ def build_average_wood_returns(cob_date: str, window: int) -> dict:
     merged = pd.concat(all_wood_prices, axis=1)
     merged['avg_price'] = merged.mean(axis=1)
     avg_price = merged[['avg_price']]
-    avg_price = avg_price.reindex(biz_days)
+    avg_price = avg_price.reindex(prices_days_list)
     avg_price = avg_price.interpolate(method='linear', axis=0)
     avg_price = avg_price.bfill().ffill()
     avg_price_relative_returns = relative_returns(avg_price)
@@ -315,7 +314,7 @@ def build_average_wood_returns(cob_date: str, window: int) -> dict:
 
 
 def build_biocane_returns(cob_date: str, window: int):
-    fx_spot_df = load_forex(cob_date=cob_date, window=window)
+    fx_spot_df = load_forex(cob_date=cob_date, window=window+1)
     biocane_dict = {}
     sugar_df, sugar_relative_returns_df = build_garmmz_sugar_returns(cob_date, window, fx_spot_df)
     maize_df, maize_relative_returns_df = build_maize_up_returns(cob_date, window, fx_spot_df)
@@ -326,9 +325,10 @@ def build_biocane_returns(cob_date: str, window: int):
                                 'relative_returns': maize_relative_returns_df['relative_returns'].rename('MAIZE UP')}
     return biocane_dict
 
+
 def build_instrument_vol_change_dict(instrument_list: list, cob_date: str, window: int) -> Dict[str, Any]:
     rms_engine = get_engine('rms')
-    days_list = get_prev_biz_days_list(cob_date, window + 1)
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
 
     instrument_vol_dict = {}
 
@@ -338,7 +338,7 @@ def build_instrument_vol_change_dict(instrument_list: list, cob_date: str, windo
             source=rms_engine
         )
         vol_change_df = vol_change_loader.load_vol_change_for_generic_curve(
-            start_date=days_list[0],
+            start_date=prices_days_list[0],
             end_date=cob_date,
             max_generic_curve=9,
             reindex_dates=None,
@@ -350,15 +350,17 @@ def build_instrument_vol_change_dict(instrument_list: list, cob_date: str, windo
     return instrument_vol_dict
 
 
-def build_product_prices_returns_dfs(cob_date: str, product: str, window: int, simulation_method: str):
+def build_product_prices_returns_dfs_for_hist_sim(cob_date: str, product: str, window: int, simulation_method: str):
     instrument_list = product_specifications[product]['instrument_list']
     usd_conversion_mode = product_specifications[product][simulation_method]['usd_conversion_mode']
     forex_mode = product_specifications[product][simulation_method]['forex_mode']
-    fx_spot_df = load_forex(cob_date=cob_date, window=window)
+    fx_spot_df = load_forex(cob_date=cob_date, window=window+1)
 
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
+    returns_days_list = get_prev_biz_days_list(cob_date, window)
+    prices_df = pd.DataFrame(index=prices_days_list)
+    relative_returns_df = pd.DataFrame(index=returns_days_list)
     instrument_dict = {}
-    prices_df = pd.DataFrame()
-    relative_returns_df = pd.DataFrame()
 
     if product == 'cotton' or product == 'rubber':
         prices_df, relative_returns_df, instrument_dict = build_instrument_generic_curves(instrument_list, cob_date,
@@ -440,7 +442,7 @@ def build_product_prices_returns_dfs(cob_date: str, product: str, window: int, s
         instrument_dict['PHYS']['BIOCANE'] = biocane_dict
         instrument_dict['PHYS']['BIOCANE']['currency'] = 'INR'
         prices_df = pd.concat([prices_df, biocane_dict['GARMMZ SUGAR']['price'],
-                                         biocane_dict['MAIZE UP']['price']], axis=1)
+                               biocane_dict['MAIZE UP']['price']], axis=1)
         relative_returns_df = pd.concat([relative_returns_df, biocane_dict['GARMMZ SUGAR']['relative_returns'],
                                          biocane_dict['MAIZE UP']['relative_returns']], axis=1)
 
@@ -449,7 +451,112 @@ def build_product_prices_returns_dfs(cob_date: str, product: str, window: int, s
         # for instrument in instrument_dict.keys():
         #     instrument_dict[instrument]['vol_change_df'] = instrument_vol_dict[instrument]
         pass
+
     returns_df = pd.concat([relative_returns_df, absolute_returns_df], axis=1)
     instrument_dict['FOREX'] = fx_spot_df
+    prices_df = prices_df.reindex(returns_days_list)
+    returns_df = returns_df.reindex(returns_days_list)
 
     return prices_df, returns_df, fx_spot_df, instrument_dict
+
+
+def build_product_prices_returns_dfs_for_mc_sim(cob_date: str, product: str, window: int, simulation_method: str):
+    all_products = ['cotton', 'rubber', 'wood', 'biocane']
+    if simulation_method == 'mc_sim':
+        # Load all products for MC simulation
+        products_to_load = all_products
+    else:
+        # Load only the specified product for Historical VaR
+        products_to_load = [product]
+
+    usd_conversion_mode = product_specifications[product][simulation_method]['usd_conversion_mode']
+    forex_mode = product_specifications[product][simulation_method]['forex_mode']
+    fx_spot_df = load_forex(cob_date=cob_date, window=window+1)
+
+    # --- STEP 2: Aggregate ALL instruments across the loading scope ---
+    combined_instrument_list = []
+
+    # 1. Collect derivatives/futures instruments from product specifications
+    for p_code in products_to_load:
+        # Avoid KeyError if a product isn't in specs (shouldn't happen if ALL_PRODUCTS is correct)
+        if p_code in product_specifications and 'instrument_list' in product_specifications[p_code]:
+            instrument_list = product_specifications[p_code]['instrument_list']
+            if instrument_list is not None:
+                combined_instrument_list.extend(instrument_list)
+
+    # Remove duplicates from the combined list
+    combined_instrument_list = list(set(combined_instrument_list))
+
+    # --- STEP 3: Load all primary futures/derivatives data once ---
+    prices_days_list = get_prev_biz_days_list(cob_date, window+1)
+    returns_days_list = get_prev_biz_days_list(cob_date, window)
+    prices_df = pd.DataFrame(index=prices_days_list)
+    relative_returns_df = pd.DataFrame(index=returns_days_list)
+    instrument_dict = {}
+
+    if combined_instrument_list:
+        # Assuming build_instrument_generic_curves can handle an empty or partially overlapping list
+        prices_df, relative_returns_df, instrument_dict = build_instrument_generic_curves(
+            combined_instrument_list, cob_date, window, usd_conversion_mode, forex_mode, fx_spot_df
+        )
+
+    # --- STEP 4: Load product-specific physical and basis data ---
+
+    # Loop over all products we actually need to load specific data for
+    for p_code in products_to_load:
+
+        # 4a. Cotton specific physical/basis data
+        if p_code == 'cotton':
+            if 'PHYS' not in instrument_dict:
+                instrument_dict['PHYS'] = {}
+
+            # EX GIN S6
+            instrument_dict['PHYS']['EX GIN S6'] = {
+                'price_series': None, 'relative_returns_df': None, 'currency': 'INR'
+            }
+            ex_gin_s6_df, ex_gin_s6_relative_returns_df = build_ex_gin_s6_returns(cob_date, window, fx_spot_df)
+            instrument_dict['PHYS']['EX GIN S6']['price_series'] = ex_gin_s6_df
+            instrument_dict['PHYS']['EX GIN S6']['relative_returns_df'] = ex_gin_s6_relative_returns_df
+
+            phys_relative_returns_df = ex_gin_s6_relative_returns_df['relative_returns'].to_frame(name='EX GIN S6')
+            prices_df = pd.concat([prices_df, ex_gin_s6_df], axis=1)
+            relative_returns_df = pd.concat([relative_returns_df, phys_relative_returns_df], axis=1)
+
+            # COTLOOK
+            cotlook_relative_returns_dict = build_cotlook_relative_returns(cob_date, window)
+            instrument_dict['PHYS']['COTLOOK'] = cotlook_relative_returns_dict
+            for cotlook in cotlook_relative_returns_dict:
+                relative_returns_df = pd.concat([relative_returns_df, cotlook_relative_returns_dict[cotlook]], axis=1)
+
+        # 4b. Wood specific physical data
+        elif p_code == 'wood':
+            wood_dict = build_average_wood_returns(cob_date, window)
+            if 'PHYS' not in instrument_dict:
+                instrument_dict['PHYS'] = {}
+
+            instrument_dict['PHYS']['WOOD'] = wood_dict
+            instrument_dict['PHYS']['WOOD']['currency'] = 'EUR'
+
+            prices_df = pd.concat([prices_df, wood_dict['WOOD AVG']['price']], axis=1)
+            relative_returns_df = pd.concat([relative_returns_df, wood_dict['WOOD AVG']['relative_returns']], axis=1)
+
+        # 4c. Biocane specific physical data
+        elif p_code == 'biocane':
+            biocane_dict = build_biocane_returns(cob_date, window)
+            if 'PHYS' not in instrument_dict:
+                instrument_dict['PHYS'] = {}
+
+            instrument_dict['PHYS']['BIOCANE'] = biocane_dict
+            instrument_dict['PHYS']['BIOCANE']['currency'] = 'INR'
+
+            prices_df = pd.concat([prices_df, biocane_dict['GARMMZ SUGAR']['price'],
+                                   biocane_dict['MAIZE UP']['price']], axis=1)
+            relative_returns_df = pd.concat([relative_returns_df, biocane_dict['GARMMZ SUGAR']['relative_returns'],
+                                             biocane_dict['MAIZE UP']['relative_returns']], axis=1)
+
+    # Add FX data to the dictionary (applies to both single and multi-product scope)
+    instrument_dict['FOREX'] = fx_spot_df
+    prices_df = prices_df.reindex(returns_days_list)
+    relative_returns_df = relative_returns_df.reindex(returns_days_list)
+
+    return prices_df, relative_returns_df, fx_spot_df, instrument_dict

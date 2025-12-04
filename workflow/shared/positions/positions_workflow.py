@@ -38,7 +38,8 @@ def build_combined_position(cob_date, product, instrument_dict, prices_df, fx_sp
         raise NotImplementedError(f"Product '{product}' not yet supported in position workflow.")
     return combined_pos_df
 
-def prepare_positions_data_for_var(combined_pos_df: pd.DataFrame, method: str, trader: bool, counterparty: bool) -> pd.DataFrame:
+def prepare_positions_data_for_var(combined_pos_df: pd.DataFrame, simulation_method: str, calculation_method: str,
+                                   trader: bool, counterparty: bool) -> pd.DataFrame:
 
     base_cols = [
         'cob_date', 'product', 'unit', 'region', 'position_type',

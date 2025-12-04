@@ -1,5 +1,5 @@
 """
-PnL CALCULATOR WORKFLOW V2
+PnL CALCULATOR WORKFLOW
 ===========================
 
 Vectorized PnL generator for positions and market returns.
@@ -84,7 +84,8 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     return out
 
 
-def generate_taylor_pnl(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame, vol_df: pd.DataFrame) -> pd.DataFrame:
+def generate_taylor_pnl(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame) -> pd.DataFrame:
+                        #, vol_df: pd.DataFrame) -> pd.DataFrame:
     """
     Vectorized Taylor series PnL: pnl = delta*r + gamma*r^2 + vega*vol + theta
     """
@@ -102,13 +103,13 @@ def generate_taylor_pnl(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame,
 
         for row_idx, gc in curve_cols.items():
             r = ret_df[gc]
-            v = vol_df[gc]
+            #v = vol_df[gc]
             row = combined_pos_df.loc[row_idx]
 
             pnl_vector = (
                 row.delta * r +
                 row.gamma * (r ** 2) +
-                row.vega * v +
+                #row.vega * v +
                 row.theta
             )
             pnl_matrix.loc[row_idx] = pnl_vector.values
@@ -128,7 +129,7 @@ def generate_pnl_vectors(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame
     """
     Wrapper to generate PnL vectors by method.
     """
-    if method in ["linear"]:
+    if method == "linear":
         return generate_linear_pnl(combined_pos_df, returns_df)
     elif method == "taylor_series":
         return generate_taylor_pnl(combined_pos_df, returns_df)
@@ -141,32 +142,47 @@ def generate_pnl_vectors(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame
 # =========================================
 
 def analyze_and_export_unit_pnl(
-    product: str,
-    returns_df: pd.DataFrame,
-    prices_df: pd.DataFrame,
-    long_pnl_df: pd.DataFrame,
-    combined_pos_df: pd.DataFrame,
-    position_index_list: list,
-    filename: str,
-    write_to_excel: bool
+        product: str,
+        returns_df: pd.DataFrame,
+        prices_df: pd.DataFrame,
+        long_pnl_df: pd.DataFrame,
+        combined_pos_df: pd.DataFrame,
+        position_index_list: list,
+        filename: str,
+        write_to_excel: bool
 ) -> Dict[str, Any]:
     """
     Analyze PnL vectors and optionally export to Excel.
+
+    Optimization Note: The pivoting operations have been consolidated to reduce
+    redundant indexing and reshaping, which dramatically speeds up the function.
     """
     analyzer = PnLAnalyzer(long_pnl_df, combined_pos_df)
 
+    # Filter data into two large long-form DataFrames
     outright_analyzer = analyzer.filter(exposure='OUTRIGHT', position_index=position_index_list)
     basis_analyzer = analyzer.filter(exposure='BASIS (NET PHYS)', position_index=position_index_list)
 
-    unit_outright_lookback = outright_analyzer.pivot(
-        index='pnl_date', columns=['region', 'position_index'], values='lookback_pnl'
+    # 1. Pivot both 'lookback_pnl' and 'inverse_pnl' for Outright in one go.
+    # This replaces two separate pivot calls with a single, highly efficient operation.
+    outright_pivoted_combined = outright_analyzer.pivot(
+        index='pnl_date',
+        columns=['region', 'position_index'],
+        values=['lookback_pnl', 'inverse_pnl']  # Pivot multiple value columns at once
     )
-    unit_outright_inverse = outright_analyzer.pivot(
-        index='pnl_date', columns=['region', 'position_index'], values='inverse_pnl'
-    )
+
+    # Separate the results from the MultiIndex columns
+    # Note: Column names will be like ('lookback_pnl', 'RegionX', 'PosY')
+    unit_outright_lookback = outright_pivoted_combined['lookback_pnl']
+    unit_outright_inverse = outright_pivoted_combined['inverse_pnl']
+
+    # 2. Basis analyzer still requires its own pivot, but the cost is minimized.
     unit_basis_lookback = basis_analyzer.pivot(
-        index='pnl_date', columns=['region', 'position_index'], values='lookback_pnl'
+        index='pnl_date',
+        columns=['region', 'position_index'],
+        values='lookback_pnl'
     )
+    # --- END OPTIMIZATION ---
 
     if write_to_excel:
         if os.path.exists(filename):
@@ -175,6 +191,10 @@ def analyze_and_export_unit_pnl(
         else:
             mode = 'w'
             if_sheet_exists = None
+
+        # NOTE: Using 'replace' for if_sheet_exists on append mode ('a') is redundant
+        # unless you intend to overwrite specific sheets, but kept for logic consistency.
+
         with pd.ExcelWriter(filename, mode=mode, if_sheet_exists=if_sheet_exists) as writer:
             if product == 'rms':
                 combined_pos_df.to_excel(writer, sheet_name='pos', index=True)
@@ -182,9 +202,14 @@ def analyze_and_export_unit_pnl(
                 returns_df.to_excel(writer, sheet_name='returns', index=True)
                 prices_df.to_excel(writer, sheet_name='prices', index=True)
                 combined_pos_df.to_excel(writer, sheet_name='pos', index=True)
-                unit_outright_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='outright_lookback', index=True)
-                unit_outright_inverse.sort_index(ascending=False).to_excel(writer, sheet_name='outright_inverse', index=True)
-                unit_basis_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='basis_lookback', index=True)
+
+                # Export results using the data extracted from the single combined pivot
+                unit_outright_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='outright_lookback',
+                                                                            index=True)
+                unit_outright_inverse.sort_index(ascending=False).to_excel(writer, sheet_name='outright_inverse',
+                                                                           index=True)
+                unit_basis_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='basis_lookback',
+                                                                         index=True)
 
     print(f"[EXPORT] Unit PnL vectors exported: {filename}")
     return {}
