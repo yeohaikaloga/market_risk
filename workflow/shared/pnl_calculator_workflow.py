@@ -36,13 +36,14 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     percentage_returns_df = percentage_returns_df.loc[:, ~percentage_returns_df.columns.duplicated()]
 
     # 2. Extract mapped return series
-    selected_cols = combined_pos_df["linear_var_map"].astype(str).tolist()
+    selected_cols = combined_pos_df["risk_factor"].astype(str).tolist()
 
-    missing = [col for col in selected_cols if col not in percentage_returns_df.columns]
-    if missing:
-        raise ValueError(f"[ERROR] Missing return series for: {missing}")
+    # missing = [col for col in selected_cols if col not in percentage_returns_df.columns]
+    # if missing:
+    #     raise ValueError(f"[ERROR] Missing risk factor for: {missing}")
 
     # 3. Build return matrix (N positions × T dates)
+    percentage_returns_df['None'] = 0.0 # Crate temporary None mapping as rubber basis VaR not being calculated
     returns_matrix = percentage_returns_df[selected_cols].T.values  # shape (N, T)
 
     pnl_matrix = pd.DataFrame(
@@ -52,7 +53,9 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     )
 
     # 4. Multiply by cob_date_prices, deltas and FX conversions
-    pnl_matrix = pnl_matrix.mul(combined_pos_df["cob_date_price"].values, axis=0)
+    cob_date_price_multiplier_condition = np.where(combined_pos_df["return_type"] == 'relative',
+                                                   combined_pos_df["cob_date_price"], 1.0)
+    pnl_matrix = pnl_matrix.mul(cob_date_price_multiplier_condition, axis=0)
     pnl_matrix = pnl_matrix.mul(combined_pos_df["delta"].values, axis=0)
     pnl_matrix = pnl_matrix.mul(combined_pos_df["to_USD_conversion"].values, axis=0)
     pnl_matrix = pnl_matrix.div(combined_pos_df["cob_date_fx"].values, axis=0)

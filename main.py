@@ -56,31 +56,36 @@ if __name__ == '__main__':
 
 
         #### THIS IS FOR COTTON VAR
-        cob_date = '2025-11-06'
-        # Sensitivity report not cleaned up for 2025-11-06
-        # Note: Greeks in DB only start from 20 Aug 2025
-        product = 'cotton'
-        simulation_method = 'hist_sim'
-        calculation_method = 'linear'
-        window = 260
-        # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
-        #                             calculation_method=calculation_method, window=window,
-        #                             with_price_var=True, write_to_excel=True)
-        simulation_method = 'mc_sim'
-        monte_carlo_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
-                                calculation_method=calculation_method, window=window,
-                                with_price_var=True, write_to_excel=True)
-
-        #### THIS IS FOR RUBBER VAR
-        # cob_date = '2025-11-21' # Only have ORS positions for 2025-10-31 and 2025-11-05, but no derivs for 2025-10-31.
-        # # Sensitivity report not cleaned up for 2025-11-06 double entry opera sensitivity; no entry for 2025-11-07
-        # product = 'rubber'
+        # cob_date = '2025-11-06'
+        # # Sensitivity report not cleaned up for 2025-11-06
+        # # Note: Greeks in DB only start from 20 Aug 2025
+        # product = 'cotton'
         # simulation_method = 'hist_sim'
         # calculation_method = 'linear'
         # window = 260
         # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+        #                             calculation_method=calculation_method, window=window,
+        #                             with_price_var=True, write_to_excel=True)
+        #
+        # simulation_method = 'mc_sim'
+        # monte_carlo_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
         #                         calculation_method=calculation_method, window=window,
-        #                         with_price_var=False, write_to_excel=True)
+        #                         with_price_var=True, write_to_excel=True)
+
+        #### THIS IS FOR RUBBER VAR
+        # cob_date = '2025-11-21'
+        # product = 'rubber'
+        # simulation_method = 'hist_sim'
+        # calculation_method = 'linear'
+        # window = 260
+        # # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+        # #                         calculation_method=calculation_method, window=window,
+        # #                         with_price_var=False, write_to_excel=True)
+        #
+        # simulation_method = 'mc_sim'
+        # monte_carlo_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+        #                          calculation_method=calculation_method, window=window,
+        #                          with_price_var=False, write_to_excel=True)
 
         #### THIS IS FOR RMS VAR
         # product = 'rms'
@@ -93,26 +98,37 @@ if __name__ == '__main__':
         #                             calculation_method=calculation_method, window=window,
         #                             with_price_var=False, write_to_excel=True)
         ## THIS IS FOR BIOCANE VAR
-        # product = 'biocane'
-        # cob_date = '2025-11-21'
-        # simulation_method = 'hist_sim'
-        # calculation_method = 'linear'
-        # window = 260
-        #
-        # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
-        #                         calculation_method=calculation_method, window=window,
-        #                         with_price_var=False, write_to_excel=True)
+        product = 'biocane'
+        cob_date = '2025-11-21'
+        simulation_method = 'hist_sim'
+        calculation_method = 'linear'
+        window = 260
+
+        historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+                                calculation_method=calculation_method, window=window,
+                                with_price_var=False, write_to_excel=True)
+
+        simulation_method = 'mc_sim'
+        monte_carlo_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+                                 calculation_method=calculation_method, window=window,
+                                 with_price_var=False, write_to_excel=True)
 
         # ### THIS IS FOR WOOD VAR
-        # product = 'wood'
-        # cob_date = '2025-11-21'
-        # simulation_method = 'hist_sim'
-        # calculation_method = 'linear'
-        # window = 260
-        #
-        # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
-        #                         calculation_method=calculation_method, window=window,
-        #                         with_price_var=False, write_to_excel=True)
+        product = 'wood'
+        cob_date = '2025-11-21'
+        simulation_method = 'hist_sim'
+        calculation_method = 'linear'
+        window = 260
+
+        historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+                                calculation_method=calculation_method, window=window,
+                                with_price_var=False, write_to_excel=True)
+
+        simulation_method = 'mc_sim'
+        monte_carlo_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
+                                 calculation_method=calculation_method, window=window,
+                                 with_price_var=False, write_to_excel=True)
+
     except:
          traceback.print_exc()
          raise

@@ -9,7 +9,7 @@ class PositionLoader(ABC):
         self.params = params or {}
 
     @staticmethod
-    def map_linear_var(row):
+    def map_linear_risk_factor(row):
         # Priority: basis_series > generic_curve > instrument_name
         if pd.notna(row.get('basis_series')) and row.get('basis_series') != '':
             return row['basis_series']
@@ -18,21 +18,21 @@ class PositionLoader(ABC):
         else:
             return row.get('instrument_name')
 
-    def assign_linear_var_map(self, df: pd.DataFrame) -> pd.DataFrame:
+    def assign_linear_risk_factor(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df.copy()
-        df['linear_var_map'] = df.apply(self.map_linear_var, axis=1)
+        df['risk_factor'] = df.apply(self.map_linear_risk_factor, axis=1)
 
         # Optional: show warnings or success
-        missing = df[df['linear_var_map'].isna() | (df['linear_var_map'] == '')]
+        missing = df[df['risk_factor'].isna() | (df['risk_factor'] == '')]
         if not missing.empty:
-            print(f"Warning: Found {len(missing)} rows with empty 'linear_var_map'.")
+            print(f"Warning: Found {len(missing)} rows with empty 'risk_factor'.")
         else:
-            print("All rows successfully mapped to 'linear_var_map'.")
+            print("All rows successfully mapped to 'risk_factor'.")
 
         return df
 
     @staticmethod
-    def map_monte_carlo_var_risk_factor(row) -> str:
+    def map_risk_factor(row) -> str:
         """
         Map a single row to a monte_carlo_var_risk_factor.
         """
@@ -52,12 +52,12 @@ class PositionLoader(ABC):
 
         return None
 
-    def assign_monte_carlo_var_risk_factor(self, df: pd.DataFrame) -> pd.DataFrame:
+    def assign_risk_factor(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Assign the monte_carlo_var_risk_factor column to the DataFrame.
         """
         df = df.copy()
-        df['monte_carlo_var_risk_factor'] = df.apply(self.map_monte_carlo_var_risk_factor, axis=1)
+        df['risk_factor'] = df.apply(self.map_risk_factor, axis=1)
         return df
 
     def duplicate_basis_and_assign_ct1(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -71,8 +71,9 @@ class PositionLoader(ABC):
 
         # Reassign risk factor to CT1 in duplicate
         ct_leg = basis_rows.copy()
-        ct_leg['monte_carlo_var_risk_factor'] = 'CT1'
+        ct_leg['risk_factor'] = 'CT1'
         ct_leg['delta'] = -basis_rows['delta']
+        ct_leg['delta_exposure'] = 0
 
         # Mark cotlook/ct legs for indexing
         basis_rows['leg_type'] = 'COTLOOK'
@@ -92,3 +93,37 @@ class PositionLoader(ABC):
         if not isinstance(portfolio, str):
             return 'NULL'
 
+    def assign_cob_date_price(self, position_df: pd.DataFrame, price_df: pd.DataFrame, cob_date: str) -> pd.DataFrame:
+        """
+        Assign cob_date_price to each position row for a single cob_date.
+
+        Args:
+            position_df: DataFrame with columns ['generic_curve', ...].
+            price_df: pivot-like DataFrame, index=cob_date, columns=generic_curve.
+            cob_date: string date to extract prices for.
+        """
+        position_df = position_df.copy()
+
+        # Ensure index is datetime
+        price_df = price_df.copy()
+        price_df.index = pd.to_datetime(price_df.index)
+        cob_date_dt = pd.to_datetime(cob_date)
+
+        if cob_date_dt not in price_df.index:
+            raise KeyError(f"cob_date {cob_date} not found in price_df index")
+
+        # Extract prices for this cob_date
+        prices_for_date = price_df.loc[cob_date_dt]
+
+        # Map generic_curve -> price
+        position_df['cob_date_price'] = position_df['generic_curve'].map(prices_for_date)
+
+        # Detect missing prices
+        missing = position_df['cob_date_price'].isna()
+        if missing.any():
+            print(f"[WARN] {missing.sum()} positions missing cob_date_price:")
+            print(position_df[missing][['generic_curve']])
+        else:
+            print("All positions mapped to cob_date_price.")
+
+        return position_df

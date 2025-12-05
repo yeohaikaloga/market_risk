@@ -19,24 +19,26 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
 
     # === STEP 1: Prepare Market Data ===
     prices_df, returns_df, fx_spot_df, instrument_dict = build_product_prices_returns_dfs_for_hist_sim(cob_date, product, window,
-                                                                                                       simulation_method)
-    save_to_pickle(prices_df, 'prices.pkl')
-    save_to_pickle(returns_df, 'returns.pkl')
-    save_to_pickle(fx_spot_df, 'fx_spot.pkl')
-    save_to_pickle(instrument_dict, 'instrument_dict.pkl')
+                                                                                                        simulation_method)
+    save_to_pickle(prices_df, f'prices_{simulation_method}_{cob_date}.pkl')
+    save_to_pickle(returns_df, f'returns_{simulation_method}_{cob_date}.pkl')
+    save_to_pickle(fx_spot_df, f'fx_spot_{simulation_method}_{cob_date}.pkl')
+    save_to_pickle(instrument_dict, f'instrument_dict_{simulation_method}_{cob_date}.pkl')
+    prices_df = load_from_pickle(f'prices_{simulation_method}_{cob_date}.pkl')
+    returns_df = load_from_pickle(f'returns_{simulation_method}_{cob_date}.pkl')
+    fx_spot_df = load_from_pickle(f'fx_spot_{simulation_method}_{cob_date}.pkl')
+    instrument_dict = load_from_pickle(f'instrument_dict_{simulation_method}_{cob_date}.pkl')
     logger.info("STEP 1: Market data prepared")
-
-    prices_df = load_from_pickle('prices.pkl')
-    returns_df = load_from_pickle('returns.pkl')
-    fx_spot_df = load_from_pickle('fx_spot.pkl')
-    instrument_dict = load_from_pickle('instrument_dict.pkl')
 
     # === STEP 2: Prepare Positions Data ===
     combined_pos_df = build_combined_position(cob_date, product, instrument_dict, prices_df, fx_spot_df)
     logger.info("STEP 2: Position data prepared")
 
     combined_pos_df = prepare_positions_data_for_var(
+        product=product,
         combined_pos_df=combined_pos_df,
+        price_df=prices_df,
+        cob_date=cob_date,
         simulation_method=simulation_method,
         calculation_method=calculation_method,
         trader=False,
@@ -47,10 +49,10 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
         combined_price_pos_df = combined_pos_df[combined_pos_df['book'] == 'PRICE']
         save_to_pickle(combined_price_pos_df, 'combined_price_pos.pkl')
         combined_price_pos_df = load_from_pickle('combined_price_pos.pkl')
-        logger.info("STEP 2-2: Price position data prepared")
 
     save_to_pickle(combined_pos_df, 'combined_pos.pkl')
     combined_pos_df = load_from_pickle('combined_pos.pkl')
+    logger.info("STEP 2-2: Price position data prepared")
 
 
     # === STEP 3: Generate PnL Vectors ===
@@ -73,8 +75,6 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
     else:
         raise NotImplementedError(f"Method '{calculation_method}' not supported yet.")
 
-
-
     analyze_and_export_unit_pnl(
         product=product,
         returns_df=returns_df,
@@ -90,6 +90,8 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
         product=product,
         combined_pos_df=combined_pos_df,
         long_pnl_df=long_pnl_df,
+        simulation_method=simulation_method,
+        calculation_method=calculation_method,
         cob_date=cob_date,
         window=window
     )
@@ -99,6 +101,8 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
             product=product,
             combined_pos_df=combined_price_pos_df,
             long_pnl_df=long_price_pnl_df,
+            simulation_method=simulation_method,
+            calculation_method=calculation_method,
             cob_date=cob_date,
             window=window
         )
@@ -117,6 +121,8 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
     if product == 'cotton':
         var_report_df = build_cotton_var_report_exceptions(long_pnl_df=long_pnl_df,
                                                            combined_pos_df=combined_pos_df,
+                                                           simulation_method=simulation_method,
+                                                           calculation_method=calculation_method,
                                                            report_df=var_report_df,
                                                            var_df=var_data_df,
                                                            cob_date=cob_date,

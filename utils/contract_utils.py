@@ -86,11 +86,11 @@ instrument_list = [
 product_specifications = {'cotton': {'instrument_list': ['CT', 'VV', 'AVY', 'C', 'W', 'S', 'BO',
                                                          'SM', 'IJ', 'SB', 'QW'],
                                      'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}, # same as grains 'after_ret'
-                                     'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}},
+                                     'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}}, # for physicals only; generic curves is always  pre, daily_fx
                           'rubber': {'instrument_list': ['OR', 'JN', 'SRB', 'RT', 'BDR', 'RG'],
                                      'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx',
                                      'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}, # same as grains 'before_ret'
-                                     'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}},
+                                     'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}}, # for physicals only; generic curves is always  pre, daily_fx
                           'rms': {'instrument_list': ['KC', 'DF', 'CC', 'QC', 'CT', 'SB', 'QW', 'S', 'SM', 'BO', 'C',
                                                       'W', 'KW', 'MW', 'CA', 'EP', 'IJ', 'RS', 'CRD', 'AX', 'KO', 'OR',
                                                       'AE', 'VV', 'AC', 'LHD', 'SRS', 'PAL', 'RT', 'ZRR', 'AK', 'BP',
@@ -140,9 +140,6 @@ def get_month_code(month: int) -> str | None:
         if num == month:
             return code
     return None
-
-
-
 
 
 def obtain_product_code_from_instrument_name(instrument_name: str, ref_dict: dict):

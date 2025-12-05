@@ -110,10 +110,8 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
     combined_pos_df = combined_pos_df.reset_index(drop=True)
     combined_pos_df['product'] = product
     combined_pos_df['cob_date'] = cob_date
-    combined_pos_df['position_index'] = (
-            product[:3] + '_L_' + str(cob_date) + '_' +
-            combined_pos_df.index.map(lambda i: str(i).zfill(4))
-    )
+    combined_pos_df['return_type'] = 'relative'
+    combined_pos_df['exposure_delta'] = combined_pos_df['delta']
 
     logger.info(f"STEP 2C completed: Combined {product} position DataFrame generated. Shape: {combined_pos_df.shape}")
     print(combined_pos_df.head())

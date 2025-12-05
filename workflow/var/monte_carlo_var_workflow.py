@@ -20,21 +20,21 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
 
     # === STEP 1-1: Prepare Market Data ===
     # prices_df, returns_df, fx_spot_df, instrument_dict = build_product_prices_returns_dfs_for_mc_sim(cob_date, product, window,
-    #                                                                                                     simulation_method)
-    # save_to_pickle(prices_df, 'prices.pkl')
-    # save_to_pickle(returns_df, 'returns.pkl')
-    # save_to_pickle(fx_spot_df, 'fx_spot.pkl')
-    # save_to_pickle(instrument_dict, 'instrument_dict.pkl')
-    prices_df = load_from_pickle('prices.pkl')
-    returns_df = load_from_pickle('returns.pkl')
-    fx_spot_df = load_from_pickle('fx_spot.pkl')
-    instrument_dict = load_from_pickle('instrument_dict.pkl')
+    #                                                                                                      simulation_method)
+    # save_to_pickle(prices_df, f'prices_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(returns_df, f'returns_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(fx_spot_df, f'fx_spot_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(instrument_dict, f'instrument_dict_{simulation_method}_{cob_date}.pkl')
+    prices_df = load_from_pickle(f'prices_{simulation_method}_{cob_date}.pkl')
+    returns_df = load_from_pickle(f'returns_{simulation_method}_{cob_date}.pkl')
+    fx_spot_df = load_from_pickle(f'fx_spot_{simulation_method}_{cob_date}.pkl')
+    instrument_dict = load_from_pickle(f'instrument_dict_{simulation_method}_{cob_date}.pkl')
     #returns_df.to_csv(f"returns_df_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
     #prices_df.to_csv(f"prices_df_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
     logger.info("STEP 1-1: Market data prepared")
 
     # === STEP 1-2: Monte Carlo Simulation ===
-    simulated_mc_returns_df = simulate_ret(returns_df, ld=0.94, no_of_observations=5)[1]
+    simulated_mc_returns_df = simulate_ret(returns_df, ld=0.94, no_of_observations=5, is_random_seed=True, seed=42)[1]
     save_to_pickle(simulated_mc_returns_df, 'simulated_mc_returns.pkl')
     simulated_mc_returns_df = load_from_pickle('simulated_mc_returns.pkl')
     simulated_mc_returns_df.to_csv(f"simulated_mc_returns_df_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
@@ -45,8 +45,12 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
     logger.info("STEP 2: Position data prepared")
 
     combined_pos_df = prepare_positions_data_for_var(
+        product=product,
         combined_pos_df=combined_pos_df,
-        method=calculation_method,
+        price_df=prices_df,
+        cob_date=cob_date,
+        simulation_method=simulation_method,
+        calculation_method=calculation_method,
         trader=False,
         counterparty=False)
     logger.info("STEP 2-1: Main position data prepared")
@@ -55,10 +59,10 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
         combined_price_pos_df = combined_pos_df[combined_pos_df['book'] == 'PRICE']
         save_to_pickle(combined_price_pos_df, 'combined_price_pos.pkl')
         combined_price_pos_df = load_from_pickle('combined_price_pos.pkl')
-        logger.info("STEP 2-2: Price position data prepared")
 
     save_to_pickle(combined_pos_df, 'combined_pos.pkl')
     combined_pos_df = load_from_pickle('combined_pos.pkl')
+    logger.info("STEP 2-2: Price position data prepared")
 
     # === STEP 3: Generate PnL Vectors ===
     if (calculation_method == 'linear' or calculation_method == 'sensitivity_matrix'
@@ -95,6 +99,8 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
         product=product,
         combined_pos_df=combined_pos_df,
         long_pnl_df=long_pnl_df,
+        simulation_method=simulation_method,
+        calculation_method=calculation_method,
         cob_date=cob_date,
         window=window
     )
@@ -104,6 +110,8 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
             product=product,
             combined_pos_df=combined_price_pos_df,
             long_pnl_df=long_price_pnl_df,
+            simulation_method=simulation_method,
+            calculation_method=calculation_method,
             cob_date=cob_date,
             window=window
         )
@@ -122,6 +130,8 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
     if product == 'cotton':
         var_report_df = build_cotton_var_report_exceptions(long_pnl_df=long_pnl_df,
                                                            combined_pos_df=combined_pos_df,
+                                                           simulation_method=simulation_method,
+                                                           calculation_method=calculation_method,
                                                            report_df=var_report_df,
                                                            var_df=var_data_df,
                                                            cob_date=cob_date,

@@ -187,7 +187,7 @@ def build_position_index_df(
 
     return pd.DataFrame.from_records(records)
 
-def generate_var(product, combined_pos_df, long_pnl_df, cob_date, window) -> pd.DataFrame:
+def generate_var(product, combined_pos_df, long_pnl_df, simulation_method, calculation_method, cob_date, window) -> pd.DataFrame:
 
     # Step 1: Build analyzer
     pnl_analyzer = PnLAnalyzer(long_pnl_df, combined_pos_df)
@@ -209,6 +209,8 @@ def generate_var(product, combined_pos_df, long_pnl_df, cob_date, window) -> pd.
     var_data_df = calculate_var_for_regions(
         var_data_df=var_data_df,
         analyzer=pnl_analyzer,
+        simulation_method=simulation_method,
+        calculation_method=calculation_method,
         cob_date=cob_date,
         window=window
     )
@@ -268,12 +270,9 @@ def build_var_report(var_df: pd.DataFrame) -> pd.DataFrame:
     report_df = pd.concat([region_report, prop_report, agg_report])
     return report_df
 
-def build_cotton_var_report_exceptions(long_pnl_df: pd.DataFrame,
-                                       combined_pos_df: pd.DataFrame,
-                                       report_df: pd.DataFrame,
-                                       var_df: pd.DataFrame,
-                                       cob_date: str,
-                                       window: int) -> pd.DataFrame:
+def build_cotton_var_report_exceptions(long_pnl_df: pd.DataFrame, combined_pos_df: pd.DataFrame, simulation_method: str,
+                                       calculation_method: str, report_df: pd.DataFrame, var_df: pd.DataFrame,
+                                       cob_date: str, window: int) -> pd.DataFrame:
     """
     Apply cotton-specific overrides:
     - For CENTRAL x_ALL, replace outright_pos with that from CENTRAL x_CT
@@ -356,6 +355,8 @@ def build_cotton_var_report_exceptions(long_pnl_df: pd.DataFrame,
     exception_cotton_var_data_df = calculate_var_for_regions(
         var_data_df=exception_cotton_var_data_df,
         analyzer=pnl_analyzer,
+        simulation_method=simulation_method,
+        calculation_method=calculation_method,
         cob_date=cob_date,
         window=window
     )

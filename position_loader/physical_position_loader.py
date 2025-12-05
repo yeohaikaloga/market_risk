@@ -261,7 +261,8 @@ class PhysicalPositionLoader(PositionLoader):
 
     def assign_basis_series(self, df: pd.DataFrame, dict) -> pd.DataFrame:
         df = df.copy()
-        df['basis_series'] = df.apply(lambda row: self.map_basis_series(row, fy24_unit_to_cotlook_basis_origin_dict), axis=1)
+        df['basis_series'] = df.apply(lambda row: self.map_basis_series(row, fy24_unit_to_cotlook_basis_origin_dict),
+                                      axis=1)
         missing = df[df['basis_series'].isna()]
         if not missing.empty:
             print(f"Warning: {len(missing)} rows have no basis_series mapping.")
@@ -307,7 +308,8 @@ class PhysicalPositionLoader(PositionLoader):
 
         return position_df
 
-    def assign_cob_date_fx(self, position_df: pd.DataFrame, fx_df: pd.DataFrame, cob_date: str) -> pd.DataFrame:
+    @staticmethod
+    def assign_cob_date_fx(position_df: pd.DataFrame, fx_df: pd.DataFrame, cob_date: str) -> pd.DataFrame:
         """
         Assign assign_cob_date_fx to each position row for a single cob_date.
 

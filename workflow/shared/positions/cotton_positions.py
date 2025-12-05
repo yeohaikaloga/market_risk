@@ -115,11 +115,13 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     # Split into basis and outright exposures: All physicals positions are basis; all fixed physical positions are outright
     basis_phy_pos_df = phy_grouped_pos_df.copy()
     basis_phy_pos_df['exposure'] = 'BASIS (NET PHYS)'
+    basis_phy_pos_df['return_type'] = 'absolute'
 
     outright_phy_pos_df = phy_grouped_pos_df[
         phy_grouped_pos_df['typ'].isin(['FIXED PURCHASE', 'FIXED SALES'])
     ].copy()
     outright_phy_pos_df['exposure'] = 'OUTRIGHT'
+    outright_phy_pos_df['return_type'] = 'relative'
 
     # India adjustment: If India DIFF PHYS =/= 0, split into respective legs and classify them as OUTRIGHT, remove the original DIFF PHYS position
     india_diff_phy_df = basis_phy_pos_df[(basis_phy_pos_df['region'] == 'INDIA') &
@@ -177,9 +179,9 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     basis_phy_pos_df['lots_to_MT_conversion'] = 1
     basis_phy_pos_df = physical_loader.assign_bbg_tickers(basis_phy_pos_df, instrument_dict) # for MC VaR
     basis_phy_pos_df = physical_loader.assign_generic_curves(basis_phy_pos_df, instrument_dict) # for MC VaR
-    basis_phy_pos_df['cob_date_price'] = 1
+    basis_phy_pos_df = physical_loader.assign_cob_date_price(basis_phy_pos_df, prices_df, cob_date)
     basis_phy_pos_df = physical_loader.assign_basis_series(basis_phy_pos_df, fy24_unit_to_cotlook_basis_origin_dict)
-    basis_phy_pos_df['cob_date_fx'] = 1
+    basis_phy_pos_df = physical_loader.assign_cob_date_fx(basis_phy_pos_df, fx_spot_df, cob_date)
     # Create unit-region mapping for derivatives
     cotton_unit_region_mapping = dict(zip(conso_pos_df['unit'], conso_pos_df['region']))
     logger.info("STEP 2F completed")
@@ -222,6 +224,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
         deriv_pos_df['region'] = deriv_pos_df['unit'].map(cotton_unit_region_mapping)
         deriv_pos_df['position_type'] = 'DERIVS'
         deriv_pos_df['exposure'] = 'OUTRIGHT'
+        deriv_pos_df['return_type'] = 'relative'
         deriv_pos_df = deriv_pos_df.rename(columns={'books': 'book'})
 
         # Add conversions
@@ -249,17 +252,13 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
         ignore_index=True
     )
 
+    combined_pos_df = combined_pos_df.reset_index(drop=True)
     combined_pos_df['product'] = product
     combined_pos_df['cob_date'] = cob_date
     combined_pos_df = combined_pos_df[
         combined_pos_df['region'].apply(lambda x: isinstance(x, str))
     ]
-
-    combined_pos_df = combined_pos_df.reset_index(drop=True)
-    combined_pos_df['position_index'] = (
-            product[:3] + '_L_' + str(cob_date) + '_' +
-            combined_pos_df.index.map(lambda i: str(i).zfill(4))
-    )
+    combined_pos_df['exposure_delta'] = combined_pos_df['delta']
 
     logger.info(f"Step 2G: Combined {product} position DataFrame generated. Shape: {combined_pos_df.shape}")
     print(combined_pos_df.head())

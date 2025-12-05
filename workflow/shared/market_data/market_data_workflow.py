@@ -407,10 +407,10 @@ def build_product_prices_returns_dfs_for_hist_sim(cob_date: str, product: str, w
         prices_df = pd.concat([prices_df, ex_gin_s6_df], axis=1)
         relative_returns_df = pd.concat([relative_returns_df, phys_relative_returns_df], axis=1)
 
-        cotlook_relative_returns_dict = build_cotlook_relative_returns(cob_date, window)
-        instrument_dict['PHYS']['COTLOOK'] = cotlook_relative_returns_dict
-        for cotlook in cotlook_relative_returns_dict:
-            relative_returns_df = pd.concat([relative_returns_df, cotlook_relative_returns_dict[cotlook]], axis=1)
+        # cotlook_relative_returns_dict = build_cotlook_relative_returns(cob_date, window)
+        # instrument_dict['PHYS']['COTLOOK'] = cotlook_relative_returns_dict
+        # for cotlook in cotlook_relative_returns_dict:
+        #     relative_returns_df = pd.concat([relative_returns_df, cotlook_relative_returns_dict[cotlook]], axis=1)
 
         basis_df = fy24_cotton_basis_workflow(
             cob_date=cob_date,

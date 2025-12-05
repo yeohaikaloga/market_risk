@@ -15,8 +15,13 @@ def build_combined_position(cob_date, product, instrument_dict, prices_df, fx_sp
 
     Parameters
     ----------
+    cob_date : str
     product : str
         'cotton', 'rubber', 'rms', 'biocane', 'wood' or 'all'
+    instrument_dict : dict
+    prices_df : pd.DataFrame
+    fx_spot_df : pd.DataFrame
+
 
     Returns
     -------
@@ -38,14 +43,15 @@ def build_combined_position(cob_date, product, instrument_dict, prices_df, fx_sp
         raise NotImplementedError(f"Product '{product}' not yet supported in position workflow.")
     return combined_pos_df
 
-def prepare_positions_data_for_var(combined_pos_df: pd.DataFrame, simulation_method: str, calculation_method: str,
-                                   trader: bool, counterparty: bool) -> pd.DataFrame:
+
+def prepare_positions_data_for_var(product: str, combined_pos_df: pd.DataFrame, price_df: pd.DataFrame, cob_date: str,
+                                   simulation_method: str, calculation_method: str, trader: bool, counterparty: bool) \
+        -> pd.DataFrame:
 
     base_cols = [
-        'cob_date', 'product', 'unit', 'region', 'position_type',
-        'total_active_lots', 'settle_delta_1', 'exposure', 'product_code', 'instrument_name', 'bbg_ticker',
-        'underlying_bbg_ticker', 'generic_curve', 'cob_date_price', 'delta', 'position_index',
-        'to_USD_conversion', 'currency', 'cob_date_fx'
+        'cob_date', 'product', 'unit', 'region', 'position_type', 'return_type', 'total_active_lots', 'settle_delta_1',
+        'exposure', 'product_code', 'instrument_name', 'bbg_ticker', 'underlying_bbg_ticker', 'generic_curve',
+        'cob_date_price', 'delta', 'exposure_delta', 'to_USD_conversion', 'currency', 'cob_date_fx'
     ]
 
     uat_engine = get_engine('uat')
@@ -61,14 +67,19 @@ def prepare_positions_data_for_var(combined_pos_df: pd.DataFrame, simulation_met
             base_cols.append('counterparty_id')
             base_cols.append('counterparty_parent')
 
-    if method == 'linear':
-        combined_pos_df = pos_loader.assign_linear_var_map(combined_pos_df)
-        base_cols.append('linear_var_map')
+    if simulation_method == 'hist_sim':
+        combined_pos_df = pos_loader.assign_linear_risk_factor(combined_pos_df)
+    elif simulation_method == 'mc_sim':
+        combined_pos_df = pos_loader.assign_risk_factor(combined_pos_df)
+        na_risk_factor_pos_df = combined_pos_df[~combined_pos_df['risk_factor'].notna()]
+        if len(na_risk_factor_pos_df) > 0:
+            print(f"WARNING: {len(na_risk_factor_pos_df)} positions were filtered out due to a missing or None risk_factor.")
 
-    elif method == 'non-linear_monte_carlo':
-        combined_pos_df = pos_loader.assign_monte_carlo_var_risk_factor(combined_pos_df)
-        combined_pos_df = pos_loader.duplicate_basis_and_assign_ct1(combined_pos_df)
-        base_cols.append('monte_carlo_var_risk_factor')
+        if product == 'cotton':
+            combined_pos_df = pos_loader.duplicate_basis_and_assign_ct1(combined_pos_df)
+            combined_pos_df = pos_loader.assign_cob_date_price(combined_pos_df, price_df, cob_date)
+            combined_pos_df['return_type'] = 'relative'
+    base_cols.append('risk_factor')
 
     # Add cotton/rubber/rms-specific columns
     if (combined_pos_df['product'].str.lower() == 'cotton').any():
@@ -85,7 +96,7 @@ def prepare_positions_data_for_var(combined_pos_df: pd.DataFrame, simulation_met
             base_cols.append('product_type')
         if 'source' not in base_cols:
             base_cols.append('source')
-    elif (combined_pos_df['product'].str.lower() == 'rms').any():
+    elif (combined_pos_df['product'].str.lower() == 'rms').any() and calculation_method == 'taylor_series':
         if 'settle_gamma_11' not in base_cols:
             base_cols.append('settle_gamma_11')
         if 'settle_vega_1' not in base_cols:
@@ -109,4 +120,7 @@ def prepare_positions_data_for_var(combined_pos_df: pd.DataFrame, simulation_met
             base_cols.append('lots_to_MT_conversion')
 
     combined_pos_df = combined_pos_df[base_cols]
+    combined_pos_df = combined_pos_df.reset_index(drop=True)
+    combined_pos_df['position_index'] = (combined_pos_df.index.map(lambda i: str(i).zfill(4)))
+    # Position index is placed only after positions are prepared for either simulations (split into legs for mc_sim)
     return combined_pos_df
