@@ -94,7 +94,7 @@ class PhysicalPositionLoader(PositionLoader):
 
         # Apply consistent filters
         df['Delta Quantity'] = pd.to_numeric(df['Delta Quantity'], errors='coerce')
-        df = df[df['Delta Quantity'] != 0.0]
+        #df = df[df['Delta Quantity'] != 0.0]
 
         print(df.head())
 
@@ -268,7 +268,7 @@ class PhysicalPositionLoader(PositionLoader):
             print(f"Warning: {len(missing)} rows have no basis_series mapping.")
             print(missing[['region', 'exposure']])
         else:
-            print("All rows successfully mapped to basis_series.")
+            print("All basis positions successfully mapped to basis_series.")
 
         return df
 

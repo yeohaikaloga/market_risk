@@ -28,7 +28,6 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     conso_pos_df['quantity'] = pd.to_numeric(conso_pos_df['quantity'], errors='coerce')
     conso_pos_df['transaction type'] = 'PHYS'
     conso_pos_df['purchases type'] = conso_pos_df['purchases type'].astype(str).str.upper()
-    # TODO China manual adjustment needs to be labelled for purchases type
     conso_pos_df['purchases type'] = conso_pos_df['purchases type'].str.replace('PURCHASES', 'PURCHASE')
     conso_pos_df['typ'] = conso_pos_df['trade type'] + ' ' + conso_pos_df['purchases type']
 
@@ -236,7 +235,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
         )
         deriv_pos_df['currency'] = 'USD'
         deriv_pos_df['cob_date_fx'] = 1
-    logger.info("STEP 2F completed")
+    logger.info(f"STEP 2F completed. Shape of deriv_pos_df: {deriv_pos_df.shape}")
 
     # Step 2G: Combine all positions
     combined_pos_df = pd.concat(
@@ -251,7 +250,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
         combined_pos_df['region'].apply(lambda x: isinstance(x, str))
     ]
     combined_pos_df['return_type'] = 'relative'
-    combined_pos_df['exposure_delta'] = combined_pos_df['delta']
+    combined_pos_df['delta_exposure'] = combined_pos_df['delta']
 
     logger.info(f"STEP 2G: Combined {product} position DataFrame generated. Shape: {combined_pos_df.shape}")
     print(combined_pos_df.head())

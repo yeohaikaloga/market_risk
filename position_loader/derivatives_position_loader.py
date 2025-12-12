@@ -37,48 +37,53 @@ class DerivativesPositionLoader(PositionLoader):
         joins = ["JOIN position_opera.sub_portfolio sp ON pos.sub_portfolio_id = sp.id",
                  "JOIN position_opera.portfolio pf ON sp.portfolio_id = pf.id",
                  "JOIN position_opera.security sec ON pos.risk_security_id = sec.id"]
+        excluded_subportfolios = ['CONSO-CT', 'US_GROWER', 'MILL OPTNS', 'USA_LIB_OTC', 'BRZ_GROWER', 'USA_LIB_PR']
+        excluded_subportfolios_sql = ", ".join(f"'{p}'" for p in excluded_subportfolios)
 
-        where_conditions = [f"pos.opera_product IN {opera_products_sql}", f"pos.cob_date = {date_sql}",
-                            "sp.subportfolio != 'CONSO-CT'"]
-                            #"CAST(pos.tdate AS DATE) BETWEEN CAST(pos.cob_date AS DATE) AND CAST(pos.cob_date AS DATE) "
-                            #"+ INTERVAL '1 day'"]  # <-- tdate-cob_date filter as Fri/Sat/Sun tdate maps to Fri cob_date
+        where_conditions = [
+            f"pos.opera_product IN {opera_products_sql}",
+            f"pos.cob_date = {date_sql}",
+            f"sp.subportfolio NOT IN ({excluded_subportfolios_sql})"
+        ]
 
         # Cotton-specific joins and filters
         if product == 'cotton':
-            joins.append("LEFT JOIN staging.portfolio_region_mapping_table_ex prmte ON prmte.unit_sd = sp.subportfolio")
+
+            prmte_join_conditions = []
+            prmte_join_conditions.append("prmte.load_date = (SELECT MAX(load_date) "
+                                         "FROM staging.portfolio_region_mapping_table_ex)")
+            excluded_book = ['ADMIN', 'NON OIL', 'POOL']
+            excluded_book_sql = ", ".join(f"'{b}'" for b in excluded_book)
+
+            if book is not None and book != 'all':
+                if isinstance(book, str):
+                    book = [book]
+                book_sql = ", ".join(f"'{b}'" for b in book)
+                # Only the explicit inclusion filter remains in the ON clause
+                prmte_join_conditions.append(f"prmte.books IN ({book_sql})")
+
+            if region is not None:
+                if isinstance(region, (list, tuple, set)):
+                    region_list_sql = ", ".join(f"'{r}'" for r in region)
+                    prmte_join_conditions.append(f"prmte.region IN ({region_list_sql})")
+                else:
+                    prmte_join_conditions.append(f"prmte.region = '{region}'")
+
+            on_clause = " AND ".join(prmte_join_conditions)
+            prmte_join_string = (
+                f"LEFT JOIN staging.portfolio_region_mapping_table_ex prmte "
+                f"ON prmte.unit_sd = sp.subportfolio AND {on_clause}"
+            )
+            joins.append(prmte_join_string)
+            where_conditions.append(f"prmte.books NOT IN ({excluded_book_sql})")
 
             select_cols = ["pos.cob_date", "sec.security_id", "sp.subportfolio", "pf.portfolio", "sec.strike",
                            "sec.derivative_type", "sec.product_code", "sec.contract_month", "sec.currency",
                            "prmte.region", "prmte.books"]
             group_by_cols = select_cols.copy()
 
-            where_conditions.append("""
-                prmte.load_date = (SELECT MAX(load_date) FROM staging.portfolio_region_mapping_table_ex)
-            """)
-
-            excluded_book = ['ADMIN', 'NON OIL', 'POOL']
-
-            if book is None or book == 'all':
-                where_conditions.append(
-                    "prmte.books NOT IN (" + ", ".join(f"'{b}'" for b in excluded_book) + ")"
-                )
-            else:
-                if isinstance(book, str):
-                    book = [book]
-                book_sql = ", ".join(f"'{b}'" for b in book)
-                excluded_book_sql = ", ".join(f"'{b}'" for b in excluded_book)
-                where_conditions.append(f"prmte.books IN ({book_sql})")
-                where_conditions.append(f"prmte.books NOT IN ({excluded_book_sql})")
-
-            if region is not None:
-                if isinstance(region, (list, tuple, set)):
-                    region_list_sql = ", ".join(f"'{r}'" for r in region)
-                    where_conditions.append(f"prmte.region IN ({region_list_sql})")
-                else:
-                    where_conditions.append(f"prmte.region = '{region}'")
-
         # Trader filter
-        if trader_id is not None or trader_id == 'all':
+        if trader_id is not None:
             joins.append("JOIN position_opera.trader tr ON pos.trader_id = tr.id")
             select_cols += ["tr.id AS trader_id", "tr.name AS trader_name"]
             group_by_cols += ["tr.id", "tr.name"]
@@ -86,7 +91,7 @@ class DerivativesPositionLoader(PositionLoader):
                 where_conditions.append(f"tr.id = {trader_id}")
 
         # Counterparty filter
-        if counterparty_id is not None or counterparty_id == 'all':
+        if counterparty_id is not None:
             joins.append("JOIN position_opera.counterparty cp ON pos.counterparty_id = cp.id")
             select_cols += ["cp.id AS counterparty_id", "cp.counterparty_parent"]
             group_by_cols += ["cp.id", "cp.counterparty_parent"]
@@ -94,16 +99,16 @@ class DerivativesPositionLoader(PositionLoader):
                 where_conditions.append(f"cp.id = {counterparty_id}")
 
         query = f"""
-            SELECT {', '.join(select_cols)},
-                   SUM(pos.total_active_lots) AS total_active_lots
-            FROM position_opera.position pos
-            {' '.join(joins)}
-            WHERE {' AND '.join(where_conditions)}
-            AND derivative_type NOT IN ('avg_cc_swap', 'fx_forward_df', 'fx_forward_ndf', 'fx_vanilla_call', 
-            'fx_vanilla_put')
-            GROUP BY {', '.join(group_by_cols)}
-        """
-        # , 'None') for derivative_type
+                SELECT {', '.join(select_cols)},
+                       SUM(pos.total_active_lots) AS total_active_lots
+                FROM position_opera.position pos
+                {' '.join(joins)}
+                WHERE {' AND '.join(where_conditions)}
+                AND derivative_type NOT IN ('avg_cc_swap', 'fx_forward_df', 'fx_forward_ndf', 'fx_vanilla_call', 
+                'fx_vanilla_put')
+                GROUP BY {', '.join(group_by_cols)}
+                """
+
         print(query)
         with self.source.connect() as conn:
             df = pd.read_sql_query(text(query), conn)
@@ -111,9 +116,13 @@ class DerivativesPositionLoader(PositionLoader):
         if product == 'cotton':
             unmapped = df[df['region'].isna() | df['books'].isna()]
             if not unmapped.empty:
+                # Use 'portfolio' column to identify the source of the unmapped data
                 unmapped_ports = unmapped['portfolio'].unique().tolist()
                 print(
-                    f"[WARNING]: The following portfolios are not mapped in portfolio_region_mapping_table_ex: {unmapped_ports}")
+                    f"[WARNING]: {len(unmapped.index)} position(s) are missing prmte mapping data."
+                    f"\n  The following portfolios are not mapped in portfolio_region_mapping_table_ex: {unmapped_ports}"
+                    f"\n  These positions are included in the results but their Region/Books columns are NULL."
+                )
 
         return df
 

@@ -134,7 +134,7 @@ def build_instrument_generic_curves(instrument_list: list, cob_date: str, window
     return prices_df, returns_df, instrument_dict
 
 
-def build_ex_gin_s6_returns(cob_date: str, window: int, fx_spot_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_ex_gin_s6_returns(cob_date: str, window: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     STEP: Generate EX GIN S6 historical prices and relative returns.
 
@@ -163,13 +163,13 @@ def build_ex_gin_s6_returns(cob_date: str, window: int, fx_spot_df: pd.DataFrame
     return ex_gin_s6_df, ex_gin_s6_relative_returns_df
 
 
-def build_garmmz_sugar_returns(cob_date: str, window: int, fx_spot_df: pd.DataFrame) \
-        -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_garmmz_sugar_returns(cob_date: str, window: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     # TODO Rewrite function after brought into prices master table
     uat_engine = get_engine('uat')
     prices_days_list = get_prev_biz_days_list(cob_date, window+1)
     garmmz_sugar = PhysicalPriceLoader(instrument_name='GARMMZ SUGAR', source=uat_engine)
-    garmmz_sugar_df = garmmz_sugar.load_garmmz_sugar_price_from_staging(start_date=prices_days_list[0], end_date=cob_date)
+    garmmz_sugar_df = garmmz_sugar.load_garmmz_sugar_price_from_staging(start_date=prices_days_list[0],
+                                                                        end_date=cob_date)
     garmmz_sugar_df['date'] = pd.to_datetime(garmmz_sugar_df['date'])
     garmmz_sugar_df = garmmz_sugar_df.set_index('date')[['price']].sort_index()
     garmmz_sugar_df = garmmz_sugar_df.rename(columns={'price': 'GARMMZ SUGAR'})
@@ -184,7 +184,7 @@ def build_garmmz_sugar_returns(cob_date: str, window: int, fx_spot_df: pd.DataFr
     return garmmz_sugar_df, garmmz_sugar_relative_returns_df
 
 
-def build_maize_up_returns(cob_date: str, window: int, fx_spot_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_maize_up_returns(cob_date: str, window: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     # TODO Rewrite function after brought into prices master table
     uat_engine = get_engine('uat')
     prices_days_list = get_prev_biz_days_list(cob_date, window+1)
@@ -260,7 +260,8 @@ def build_cotlook_relative_returns(cob_date: str, window: int) -> dict:
         #        stitched_crop_series_relative_returns_df * stitched_crop_series.loc[cob_date, instrument_name]
         # )
 
-        cotlook_dict[instrument_name] = stitched_crop_series_relative_returns_df
+        cotlook_dict[instrument_name] = {'relative_returns': stitched_crop_series_relative_returns_df,
+                                         'price_series': stitched_crop_series}
     return cotlook_dict
 
 
@@ -314,10 +315,9 @@ def build_average_wood_returns(cob_date: str, window: int) -> dict:
 
 
 def build_biocane_returns(cob_date: str, window: int):
-    fx_spot_df = load_forex(cob_date=cob_date, window=window+1)
     biocane_dict = {}
-    sugar_df, sugar_relative_returns_df = build_garmmz_sugar_returns(cob_date, window, fx_spot_df)
-    maize_df, maize_relative_returns_df = build_maize_up_returns(cob_date, window, fx_spot_df)
+    sugar_df, sugar_relative_returns_df = build_garmmz_sugar_returns(cob_date, window)
+    maize_df, maize_relative_returns_df = build_maize_up_returns(cob_date, window)
     biocane_dict['GARMMZ SUGAR'] = {'price': sugar_df,
                                     'relative_returns': sugar_relative_returns_df['relative_returns']
                                     .rename('GARMMZ SUGAR')}
@@ -400,7 +400,7 @@ def build_product_prices_returns_dfs_for_hist_sim(cob_date: str, product: str, w
             'relative_returns_df': None,
             'currency': 'INR'
         }
-        ex_gin_s6_df, ex_gin_s6_relative_returns_df = build_ex_gin_s6_returns(cob_date, window, fx_spot_df)
+        ex_gin_s6_df, ex_gin_s6_relative_returns_df = build_ex_gin_s6_returns(cob_date, window)
         instrument_dict['PHYS']['EX GIN S6']['price_series'] = ex_gin_s6_df
         instrument_dict['PHYS']['EX GIN S6']['relative_returns_df'] = ex_gin_s6_relative_returns_df
         phys_relative_returns_df = ex_gin_s6_relative_returns_df['relative_returns'].to_frame(name='EX GIN S6')
@@ -422,6 +422,7 @@ def build_product_prices_returns_dfs_for_hist_sim(cob_date: str, product: str, w
         absolute_returns_df = basis_df
         absolute_returns_df.columns = absolute_returns_df.columns.str.replace(' final AR series', '', regex=False)
         absolute_returns_df.columns = absolute_returns_df.columns.str.replace(' final AR (sm) series', '', regex=False)
+        absolute_returns_df.columns = absolute_returns_df.columns + '_abs'
         instrument_dict['BASIS'] = {}
         instrument_dict['BASIS']['abs_returns_$_df'] = absolute_returns_df
 
@@ -514,7 +515,7 @@ def build_product_prices_returns_dfs_for_mc_sim(cob_date: str, product: str, win
             instrument_dict['PHYS']['EX GIN S6'] = {
                 'price_series': None, 'relative_returns_df': None, 'currency': 'INR'
             }
-            ex_gin_s6_df, ex_gin_s6_relative_returns_df = build_ex_gin_s6_returns(cob_date, window, fx_spot_df)
+            ex_gin_s6_df, ex_gin_s6_relative_returns_df = build_ex_gin_s6_returns(cob_date, window)
             instrument_dict['PHYS']['EX GIN S6']['price_series'] = ex_gin_s6_df
             instrument_dict['PHYS']['EX GIN S6']['relative_returns_df'] = ex_gin_s6_relative_returns_df
 
@@ -523,10 +524,12 @@ def build_product_prices_returns_dfs_for_mc_sim(cob_date: str, product: str, win
             relative_returns_df = pd.concat([relative_returns_df, phys_relative_returns_df], axis=1)
 
             # COTLOOK
-            cotlook_relative_returns_dict = build_cotlook_relative_returns(cob_date, window)
-            instrument_dict['PHYS']['COTLOOK'] = cotlook_relative_returns_dict
-            for cotlook in cotlook_relative_returns_dict:
-                relative_returns_df = pd.concat([relative_returns_df, cotlook_relative_returns_dict[cotlook]], axis=1)
+            cotlook_dict = build_cotlook_relative_returns(cob_date, window)
+            instrument_dict['PHYS']['COTLOOK'] = cotlook_dict
+            for cotlook in cotlook_dict:
+                prices_df = pd.concat([prices_df, cotlook_dict[cotlook]['price_series']], axis=1)
+                relative_returns_df = pd.concat([relative_returns_df, cotlook_dict[cotlook]['relative_returns']],
+                                                axis=1)
 
         # 4b. Wood specific physical data
         elif p_code == 'wood':

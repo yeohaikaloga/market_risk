@@ -42,5 +42,5 @@ def generate_biocane_combined_position(cob_date: str, instrument_dict: Dict[str,
     outright_phy_pos_df['currency'] = 'INR'
     outright_phy_pos_df = physical_loader.assign_cob_date_fx(outright_phy_pos_df, fx_spot_df, cob_date)
     outright_phy_pos_df['return_type'] = 'relative'
-    outright_phy_pos_df['exposure_delta'] = outright_phy_pos_df['delta']
+    outright_phy_pos_df['delta_exposure'] = outright_phy_pos_df['delta']
     return outright_phy_pos_df

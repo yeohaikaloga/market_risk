@@ -11,8 +11,8 @@ class PositionLoader(ABC):
     @staticmethod
     def map_linear_risk_factor(row):
         # Priority: basis_series > generic_curve > instrument_name
-        if pd.notna(row.get('basis_series')) and row.get('basis_series') != '':
-            return row['basis_series']
+        if pd.notna(row.get('basis_series')) and row.get('basis_series') != '' and row.get('return_type') == 'absolute':
+            return row['basis_series'] + '_abs'
         elif 'generic_curve' in row and pd.notna(row.get('generic_curve')) and row.get('generic_curve') != '':
             return row['generic_curve']
         else:
@@ -99,7 +99,7 @@ class PositionLoader(ABC):
 
         Args:
             position_df: DataFrame with columns ['generic_curve', ...].
-            price_df: pivot-like DataFrame, index=cob_date, columns=generic_curve.
+            price_df: pivot-like DataFrame, index=cob_date, columns=risk_factor.
             cob_date: string date to extract prices for.
         """
         position_df = position_df.copy()
@@ -116,13 +116,13 @@ class PositionLoader(ABC):
         prices_for_date = price_df.loc[cob_date_dt]
 
         # Map generic_curve -> price
-        position_df['cob_date_price'] = position_df['generic_curve'].map(prices_for_date)
+        position_df['cob_date_price'] = position_df['risk_factor'].map(prices_for_date)
 
         # Detect missing prices
         missing = position_df['cob_date_price'].isna()
         if missing.any():
             print(f"[WARN] {missing.sum()} positions missing cob_date_price:")
-            print(position_df[missing][['generic_curve']])
+            print(position_df[missing][['risk_factor']])
         else:
             print("All positions mapped to cob_date_price.")
 

@@ -15,9 +15,8 @@ No row-by-row loops for large datasets.
 import pandas as pd
 import numpy as np
 import os
-import pickle
 from typing import Dict, Any
-
+from utils.log_utils import get_logger
 from pnl_analyzer.pnl_analyzer import PnLAnalyzer
 
 
@@ -31,7 +30,7 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     FIX: long_pnl_df['position_index'] now matches combined_pos_df['position_index']
     without changing the DataFrame index.
     """
-
+    logger = get_logger(__name__)
     # 1. Ensure unique return series columns
     percentage_returns_df = percentage_returns_df.loc[:, ~percentage_returns_df.columns.duplicated()]
 
@@ -43,15 +42,16 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     #     raise ValueError(f"[ERROR] Missing risk factor for: {missing}")
 
     # 3. Build return matrix (N positions × T dates)
-    percentage_returns_df['None'] = 0.0 # Crate temporary None mapping as rubber basis VaR not being calculated
+    percentage_returns_df['None'] = 0.0
+    # Crate temporary None mapping as rubber basis VaR not being calculated
     returns_matrix = percentage_returns_df[selected_cols].T.values  # shape (N, T)
-
+    logger.info('STEP 3-1: Returns matrix prepared')
     pnl_matrix = pd.DataFrame(
         returns_matrix,
         index=combined_pos_df.index,
         columns=percentage_returns_df.index
     )
-
+    logger.info('STEP 3-2: PnL matrix calculated')
     # 4. Multiply by cob_date_prices, deltas and FX conversions
     cob_date_price_multiplier_condition = np.where(combined_pos_df["return_type"] == 'relative',
                                                    combined_pos_df["cob_date_price"], 1.0)
@@ -59,7 +59,7 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     pnl_matrix = pnl_matrix.mul(combined_pos_df["delta"].values, axis=0)
     pnl_matrix = pnl_matrix.mul(combined_pos_df["to_USD_conversion"].values, axis=0)
     pnl_matrix = pnl_matrix.div(combined_pos_df["cob_date_fx"].values, axis=0)
-
+    logger.info('STEP 3-3: Conversions completed')
     # ------------------------------------------------------------------
     # 5. ADD REAL position_index AS A COLUMN
     # ------------------------------------------------------------------
@@ -106,13 +106,13 @@ def generate_taylor_pnl(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame)
 
         for row_idx, gc in curve_cols.items():
             r = ret_df[gc]
-            #v = vol_df[gc]
+            # v = vol_df[gc]
             row = combined_pos_df.loc[row_idx]
 
             pnl_vector = (
                 row.delta * r +
                 row.gamma * (r ** 2) +
-                #row.vega * v +
+                # row.vega * v +
                 row.theta
             )
             pnl_matrix.loc[row_idx] = pnl_vector.values
@@ -136,6 +136,10 @@ def generate_pnl_vectors(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame
         return generate_linear_pnl(combined_pos_df, returns_df)
     elif method == "taylor_series":
         return generate_taylor_pnl(combined_pos_df, returns_df)
+    elif method == "sensitivity_matrix":
+        return generate_sensitivity_repricing_pnl(combined_pos_df, returns_df)
+    elif method == "repricing":
+        return generate_full_repricing_pnl(combined_pos_df, returns_df)
     else:
         raise NotImplementedError(f"Unsupported PnL method: {method}")
 
@@ -151,7 +155,7 @@ def analyze_and_export_unit_pnl(
         long_pnl_df: pd.DataFrame,
         combined_pos_df: pd.DataFrame,
         position_index_list: list,
-        filename: str,
+        full_path_to_excel: str,
         write_to_excel: bool
 ) -> Dict[str, Any]:
     """
@@ -160,12 +164,14 @@ def analyze_and_export_unit_pnl(
     Optimization Note: The pivoting operations have been consolidated to reduce
     redundant indexing and reshaping, which dramatically speeds up the function.
     """
+    logger = get_logger(__name__)
     analyzer = PnLAnalyzer(long_pnl_df, combined_pos_df)
 
     # Filter data into two large long-form DataFrames
     outright_analyzer = analyzer.filter(exposure='OUTRIGHT', position_index=position_index_list)
+    logger.info('STEP 3A-1: Outright positions analysed')
     basis_analyzer = analyzer.filter(exposure='BASIS (NET PHYS)', position_index=position_index_list)
-
+    logger.info('STEP 3A-2: Basis positions analysed')
     # 1. Pivot both 'lookback_pnl' and 'inverse_pnl' for Outright in one go.
     # This replaces two separate pivot calls with a single, highly efficient operation.
     outright_pivoted_combined = outright_analyzer.pivot(
@@ -177,28 +183,24 @@ def analyze_and_export_unit_pnl(
     # Separate the results from the MultiIndex columns
     # Note: Column names will be like ('lookback_pnl', 'RegionX', 'PosY')
     unit_outright_lookback = outright_pivoted_combined['lookback_pnl']
+    logger.info('STEP 3A-3: Outright lookback PnL prepared')
     unit_outright_inverse = outright_pivoted_combined['inverse_pnl']
-
+    logger.info('STEP 3A-4: Outright inverse PnL prepared')
     # 2. Basis analyzer still requires its own pivot, but the cost is minimized.
     unit_basis_lookback = basis_analyzer.pivot(
         index='pnl_date',
         columns=['region', 'position_index'],
         values='lookback_pnl'
     )
-    # --- END OPTIMIZATION ---
+    logger.info('STEP 3A-5: Basis PnL prepared')
 
     if write_to_excel:
-        if os.path.exists(filename):
-            mode = 'a'
-            if_sheet_exists = 'replace'
-        else:
-            mode = 'w'
-            if_sheet_exists = None
+        writer_kwargs = {'mode': 'w'}
+        if os.path.exists(full_path_to_excel):
+            writer_kwargs['mode'] = 'a'
+            writer_kwargs['if_sheet_exists'] = 'replace'
 
-        # NOTE: Using 'replace' for if_sheet_exists on append mode ('a') is redundant
-        # unless you intend to overwrite specific sheets, but kept for logic consistency.
-
-        with pd.ExcelWriter(filename, mode=mode, if_sheet_exists=if_sheet_exists) as writer:
+        with pd.ExcelWriter(full_path_to_excel, **writer_kwargs) as writer:
             if product == 'rms':
                 combined_pos_df.to_excel(writer, sheet_name='pos', index=True)
             else:
@@ -213,6 +215,5 @@ def analyze_and_export_unit_pnl(
                                                                            index=True)
                 unit_basis_lookback.sort_index(ascending=False).to_excel(writer, sheet_name='basis_lookback',
                                                                          index=True)
-
-    print(f"[EXPORT] Unit PnL vectors exported: {filename}")
+    logger.info(f'STEP 3A-6: Unit PnL vectors exported: {full_path_to_excel}')
     return {}

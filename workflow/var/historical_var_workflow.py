@@ -18,16 +18,16 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
     filename = f"{cob_date}_{product[:3]}_{simulation_method}_{calculation_method}_var_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     # === STEP 1: Prepare Market Data ===
-    prices_df, returns_df, fx_spot_df, instrument_dict = build_product_prices_returns_dfs_for_hist_sim(cob_date, product, window,
-                                                                                                        simulation_method)
-    save_to_pickle(prices_df, f'prices_{simulation_method}_{cob_date}.pkl')
-    save_to_pickle(returns_df, f'returns_{simulation_method}_{cob_date}.pkl')
-    save_to_pickle(fx_spot_df, f'fx_spot_{simulation_method}_{cob_date}.pkl')
-    save_to_pickle(instrument_dict, f'instrument_dict_{simulation_method}_{cob_date}.pkl')
-    prices_df = load_from_pickle(f'prices_{simulation_method}_{cob_date}.pkl')
-    returns_df = load_from_pickle(f'returns_{simulation_method}_{cob_date}.pkl')
-    fx_spot_df = load_from_pickle(f'fx_spot_{simulation_method}_{cob_date}.pkl')
-    instrument_dict = load_from_pickle(f'instrument_dict_{simulation_method}_{cob_date}.pkl')
+    # prices_df, returns_df, fx_spot_df, instrument_dict = build_product_prices_returns_dfs_for_hist_sim(cob_date, product, window,
+    #                                                                                                     simulation_method)
+    # save_to_pickle(prices_df, f'prices_{product}_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(returns_df, f'returns_{product}_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(fx_spot_df, f'fx_spot_{product}_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(instrument_dict, f'instrument_dict_{product}_{simulation_method}_{cob_date}.pkl')
+    prices_df = load_from_pickle(f'prices_{product}_{simulation_method}_{cob_date}.pkl')
+    returns_df = load_from_pickle(f'returns_{product}_{simulation_method}_{cob_date}.pkl')
+    fx_spot_df = load_from_pickle(f'fx_spot_{product}_{simulation_method}_{cob_date}.pkl')
+    instrument_dict = load_from_pickle(f'instrument_dict_{product}_{simulation_method}_{cob_date}.pkl')
     logger.info("STEP 1: Market data prepared")
 
     # === STEP 2: Prepare Positions Data ===
@@ -147,4 +147,4 @@ def historical_var_workflow(cob_date: str, product: str, simulation_method: str,
                 price_var_report_df.to_excel(writer, sheet_name='price_var', index=True)
 
     # TODO to write report formatter function, and subsequently, create email with to/cc/bcc list.
-    logger.info("STEP 6: VaR report exported")
+    logger.info(f"STEP 6: {simulation_method} VaR report exported")

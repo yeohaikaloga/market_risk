@@ -4,6 +4,7 @@ from workflow.shared.pnl_calculator_workflow import generate_pnl_vectors, analyz
 from workflow.var.var_generator_workflow import (generate_var, build_var_report, build_cotton_var_report_exceptions,
                                                  build_cotton_price_var_report_exceptions,
                                                  build_rubber_var_report_exceptions)
+from price_series_generator.simulated_returns_series_generator import SimulatedReturnsSeriesGenerator
 from monte_carlo_simulations.simulator import simulate_ret
 import pandas as pd
 import os
@@ -13,31 +14,43 @@ from utils.log_utils import get_logger, save_to_pickle, load_from_pickle
 def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str, calculation_method: str, window: int,
                             with_price_var: bool, write_to_excel: bool):
     logger = get_logger(__name__)
-    logger.info(f"Running historical VaR workflow for product: {product}, COB: {cob_date}, "
+    logger.info(f"Running Monte Carlo VaR workflow for product: {product}, COB: {cob_date}, "
                 f"Simulation Method: {simulation_method}, Calculation Method: {calculation_method}, Window: {window}")
 
-    filename = f"{cob_date}_{product[:3]}_{simulation_method}_{calculation_method}_var_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    output_filename = f"{cob_date}_{product[:3]}_{simulation_method}_{calculation_method}_var_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
     # === STEP 1-1: Prepare Market Data ===
     # prices_df, returns_df, fx_spot_df, instrument_dict = build_product_prices_returns_dfs_for_mc_sim(cob_date, product, window,
     #                                                                                                      simulation_method)
-    # save_to_pickle(prices_df, f'prices_{simulation_method}_{cob_date}.pkl')
-    # save_to_pickle(returns_df, f'returns_{simulation_method}_{cob_date}.pkl')
-    # save_to_pickle(fx_spot_df, f'fx_spot_{simulation_method}_{cob_date}.pkl')
-    # save_to_pickle(instrument_dict, f'instrument_dict_{simulation_method}_{cob_date}.pkl')
-    prices_df = load_from_pickle(f'prices_{simulation_method}_{cob_date}.pkl')
-    returns_df = load_from_pickle(f'returns_{simulation_method}_{cob_date}.pkl')
-    fx_spot_df = load_from_pickle(f'fx_spot_{simulation_method}_{cob_date}.pkl')
-    instrument_dict = load_from_pickle(f'instrument_dict_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(prices_df, f'prices_{product}_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(returns_df, f'returns_{product}_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(fx_spot_df, f'fx_spot_{product}_{simulation_method}_{cob_date}.pkl')
+    # save_to_pickle(instrument_dict, f'instrument_dict_{product}_{simulation_method}_{cob_date}.pkl')
+    prices_df = load_from_pickle(f'prices_{product}_{simulation_method}_{cob_date}.pkl')
+    returns_df = load_from_pickle(f'returns_{product}_{simulation_method}_{cob_date}.pkl')
+    fx_spot_df = load_from_pickle(f'fx_spot_{product}_{simulation_method}_{cob_date}.pkl')
+    instrument_dict = load_from_pickle(f'instrument_dict_{product}_{simulation_method}_{cob_date}.pkl')
     #returns_df.to_csv(f"returns_df_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
     #prices_df.to_csv(f"prices_df_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
     logger.info("STEP 1-1: Market data prepared")
 
     # === STEP 1-2: Monte Carlo Simulation ===
-    simulated_mc_returns_df = simulate_ret(returns_df, ld=0.94, no_of_observations=5, is_random_seed=True, seed=42)[1]
-    save_to_pickle(simulated_mc_returns_df, 'simulated_mc_returns.pkl')
-    simulated_mc_returns_df = load_from_pickle('simulated_mc_returns.pkl')
-    simulated_mc_returns_df.to_csv(f"simulated_mc_returns_df_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+    if True:
+        relevant_risk_factors = ['CT', 'VV', 'AVY', 'OR', 'JN', 'SRB', 'BDR', 'RG', 'RT', 'C', 'W', 'S', 'AIndex',
+                                 'MeOrTe', 'IvCoMa', 'BuFaBo', 'BrCo', 'Shankar6', 'GaSu', 'MaizeUP', 'SawnAvg']
+        simulated_returns_filename = 'daily_simulated_matrix_' + cob_date.replace('-','')
+        mc_returns_generator = SimulatedReturnsSeriesGenerator.load_relevant_simulated_returns(simulated_returns_filename,
+                                                                                               relevant_risk_factors)
+        simulated_mc_returns_df = mc_returns_generator.price_df.head()
+        # simulated_mc_returns_df = mc_returns_generator.price_df #TODO Switch to this for product purposes
+    else:
+        # TODO Code branched to take in Grains DB simulated returns instead of generating from GRID (by right this is
+        #  temporary arrangement until we are able to generate Grains tickers (physicals and futures) from GRID)
+        simulated_mc_returns_df = simulate_ret(returns_df, ld=0.94, no_of_observations=5, is_random_seed=True, seed=42)[1]
+        save_to_pickle(simulated_mc_returns_df, 'simulated_mc_returns.pkl')
+        simulated_mc_returns_df = load_from_pickle('simulated_mc_returns.pkl')
+        simulated_mc_returns_df.to_csv(f"simulated_mc_returns_df_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+
     logger.info("STEP 1-2: Monte Carlo returns simulated")
 
     # === STEP 2: Prepare Positions Data ===
@@ -91,7 +104,7 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
         long_pnl_df=long_pnl_df,
         combined_pos_df=combined_pos_df,
         position_index_list=[],
-        filename=filename,
+        filename=output_filename,
         write_to_excel=write_to_excel)
 
     # === STEP 4: Calculate VaR ===
@@ -144,13 +157,13 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
 
     # === STEP 6: Export to Excel ===
     if write_to_excel:
-        if os.path.exists(filename):
+        if os.path.exists(output_filename):
             mode = 'a'
             if_sheet_exists = 'replace'
         else:
             mode = 'w'
             if_sheet_exists = None
-        with pd.ExcelWriter(filename, mode=mode, if_sheet_exists=if_sheet_exists) as writer:
+        with pd.ExcelWriter(output_filename, mode=mode, if_sheet_exists=if_sheet_exists) as writer:
             var_report_df.to_excel(writer, sheet_name='var', index=True)
             if with_price_var:
                 price_var_report_df.to_excel(writer, sheet_name='price_var', index=True)

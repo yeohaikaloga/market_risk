@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 from empyrical.stats import *
-
+from utils.log_utils import get_logger
 
 def df_to_array_dict(df: pd.DataFrame) -> dict:
     """
@@ -18,7 +18,7 @@ def simulate_ret(ret_df, ld, no_of_observations=5000, lookback=260, std_dev_esti
     ret_df is relative_returns_% of all risk factors (i.e. generic curves and physical prices) based on X-day window
     simulatedRet_df is also relative_returns_% of all risk factors based on number of simulations
     """
-
+    logger = get_logger(__name__)
     if is_random_seed:
         np.random.seed(seed)
 

@@ -67,15 +67,15 @@ def calculate_var_for_regions(var_data_df: pd.DataFrame, analyzer: PnLAnalyzer, 
         # Step 2: Position Calculation
         outright_pos = 0
         if outright_positions and len(outright_positions) > 0:
-            outright_pos = pos_df[pos_df['position_index'].isin(outright_positions)]['exposure_delta'].sum()
+            outright_pos = pos_df[pos_df['position_index'].isin(outright_positions)]['delta_exposure'].sum()
 
         basis_pos = 0
         if basis_positions and len(basis_positions) > 0:
-            basis_pos = pos_df[pos_df['position_index'].isin(basis_positions)]['exposure_delta'].sum()
+            basis_pos = pos_df[pos_df['position_index'].isin(basis_positions)]['delta_exposure'].sum()
 
         overall_pos = 0
         if overall_positions and len(overall_positions) > 0:
-            overall_pos = pos_df[pos_df['position_index'].isin(overall_positions)]['exposure_delta'].sum()
+            overall_pos = pos_df[pos_df['position_index'].isin(overall_positions)]['delta_exposure'].sum()
 
         var_data_df.at[i, 'outright_pos'] = int(outright_pos)
         var_data_df.at[i, 'basis_pos'] = int(basis_pos)

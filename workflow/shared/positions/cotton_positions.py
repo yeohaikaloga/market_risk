@@ -176,12 +176,14 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
         basis_phy_pos_df['product_code']
         .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
     )
+
     basis_phy_pos_df['lots_to_MT_conversion'] = 1
-    basis_phy_pos_df = physical_loader.assign_bbg_tickers(basis_phy_pos_df, instrument_dict) # for MC VaR
-    basis_phy_pos_df = physical_loader.assign_generic_curves(basis_phy_pos_df, instrument_dict) # for MC VaR
+    basis_phy_pos_df = physical_loader.assign_bbg_tickers(basis_phy_pos_df, instrument_dict)
+    basis_phy_pos_df = physical_loader.assign_generic_curves(basis_phy_pos_df, instrument_dict)
     basis_phy_pos_df = physical_loader.assign_cob_date_price(basis_phy_pos_df, prices_df, cob_date)
     basis_phy_pos_df = physical_loader.assign_basis_series(basis_phy_pos_df, fy24_unit_to_cotlook_basis_origin_dict)
     basis_phy_pos_df = physical_loader.assign_cob_date_fx(basis_phy_pos_df, fx_spot_df, cob_date)
+
     # Create unit-region mapping for derivatives
     cotton_unit_region_mapping = dict(zip(conso_pos_df['unit'], conso_pos_df['region']))
     logger.info("STEP 2F completed")
@@ -190,8 +192,8 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     derivatives_loader = DerivativesPositionLoader(date=cob_date, source=uat_engine)
     deriv_pos_df = derivatives_loader.load_position(
         date=cob_date,
-        trader_id='all',
-        counterparty_id='all',
+        trader_id=None,
+        counterparty_id=None,
         product=product,
         book=None
     )
@@ -258,7 +260,7 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
     combined_pos_df = combined_pos_df[
         combined_pos_df['region'].apply(lambda x: isinstance(x, str))
     ]
-    combined_pos_df['exposure_delta'] = combined_pos_df['delta']
+    combined_pos_df['delta_exposure'] = combined_pos_df['delta']
 
     logger.info(f"Step 2G: Combined {product} position DataFrame generated. Shape: {combined_pos_df.shape}")
     print(combined_pos_df.head())
