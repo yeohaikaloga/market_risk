@@ -111,3 +111,38 @@ def load_from_feather_in_dir(cob_date: str, filename: str) -> pd.DataFrame:
     except Exception as e:
         print(f"ERROR: Failed to load feather file {full_path}: {e}")
         raise
+
+
+def save_to_csv_in_dir(df: pd.DataFrame, cob_date: str, filename: str):
+    """
+    Saves a pandas DataFrame to a CSV file inside the COB date-specific output directory.
+    """
+    # Ensure the filename ends with .csv
+    if not filename.lower().endswith('.csv'):
+        filename += '.csv'
+
+    full_path = get_full_path(cob_date, filename)
+    try:
+        # index=False is usually preferred unless the index is meaningful (e.g., Timestamps)
+        df.to_csv(full_path, index=False)
+        print(f"INFO: Data saved to CSV: {full_path}")
+    except Exception as e:
+        print(f"ERROR: Failed to save CSV file {full_path}: {e}")
+
+
+def load_from_csv_in_dir(cob_date: str, filename: str) -> pd.DataFrame:
+    """
+    Loads data from a CSV file inside the COB date-specific output directory.
+    """
+    # Ensure the filename ends with .csv
+    if not filename.lower().endswith('.csv'):
+        filename += '.csv'
+
+    full_path = get_full_path(cob_date, filename)
+    try:
+        df = pd.read_csv(full_path)
+        print(f"INFO: Data loaded from CSV: {full_path}")
+        return df
+    except Exception as e:
+        print(f"ERROR: Failed to load CSV file {full_path}: {e}")
+        raise

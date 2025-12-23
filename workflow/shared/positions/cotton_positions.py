@@ -221,10 +221,10 @@ def generate_cotton_combined_position(cob_date: str, instrument_dict: Dict[str, 
         )
         deriv_pos_df = derivatives_loader.assign_generic_curves(deriv_pos_df, instrument_dict)
         deriv_pos_df = derivatives_loader.assign_cob_date_price(deriv_pos_df, prices_df, cob_date)
-        deriv_pos_df['product_code'] = deriv_pos_df['security_id'].str.split().str[:2].str.join(' ')
         deriv_pos_df = derivatives_loader.assign_cotton_unit(deriv_pos_df)
         deriv_pos_df['region'] = deriv_pos_df['unit'].map(cotton_unit_region_mapping)
         deriv_pos_df['position_type'] = 'DERIVS'
+        deriv_pos_df['derivative_type'] = deriv_pos_df['derivative_type'].str.upper()
         deriv_pos_df['exposure'] = 'OUTRIGHT'
         deriv_pos_df['return_type'] = 'relative'
         deriv_pos_df = deriv_pos_df.rename(columns={'books': 'book'})

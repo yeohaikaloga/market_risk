@@ -54,6 +54,9 @@ class PhysicalPriceLoader(PriceLoader):
                 AND pc.instrument_id = {self.params.get('instrument_id')}
                 AND pmp.tdate BETWEEN '{start_date}' AND '{end_date}'
                 """
+            #TODO replace tdate with cob_date? If so, then in cotton_basis_generator, need not have -1 shift in
+            # crop_basis_df[col_name] = crop_basis_df[crop_year].shift(-1) - crop_basis_df[contract] [MUST VERIFY]
+
 
             with self.source.connect() as conn:
                 df = pd.read_sql_query(text(wood_query), conn)
@@ -90,6 +93,7 @@ class PhysicalPriceLoader(PriceLoader):
 
         return df
 
+    # TODO Load from master prices table when ready
     def load_garmmz_sugar_price_from_staging(self, start_date, end_date, reindex_dates=None) -> pd.DataFrame:
 
         query = f"""
@@ -106,6 +110,7 @@ class PhysicalPriceLoader(PriceLoader):
 
         return df
 
+    # TODO Load from master prices table when ready
     def load_maize_up_price_from_staging(self, start_date, end_date, reindex_dates=None) -> pd.DataFrame:
 
         query = f"""

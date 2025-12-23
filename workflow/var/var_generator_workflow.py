@@ -98,25 +98,27 @@ def build_position_index_df(
                 'no_of_basis_positions': 0
             }
 
-        outright_analyzer = analyzer.filter(exposure='OUTRIGHT')
-        basis_analyzer = analyzer.filter(exposure='BASIS (NET PHYS)')
+        outright_analyzer = analyzer.filter_position_metadata(exposure='OUTRIGHT')
+        basis_analyzer = analyzer.filter_position_metadata(exposure='BASIS (NET PHYS)')
 
         outright_positions = outright_analyzer.get_position_index() if outright_analyzer else []
         basis_positions = basis_analyzer.get_position_index() if basis_analyzer else []
 
         return {
-            'outright_position_index_list': outright_positions,
+            'outright_position_index_list': list(outright_positions),
             'no_of_outright_positions': len(outright_positions),
-            'basis_position_index_list': basis_positions,
+            'basis_position_index_list': list(basis_positions),
             'no_of_basis_positions': len(basis_positions)
         }
 
     # === Per-region entries ===
-    region_list = pnl_analyzer._pos_and_pnl_df['region'].unique()
+    region_list = pnl_analyzer.position_df['region'].unique()
     for region in region_list:
+        print(region)
         if pnl_analyzer:
-            region_analyzer = pnl_analyzer.filter(region=region)
-            instruments = region_analyzer._pos_and_pnl_df['instrument_name'].unique()
+            region_analyzer = pnl_analyzer.filter_position_metadata(region=region)
+            instruments = region_analyzer.position_df['instrument_name'].unique()
+            print(instruments)
 
             level = 'prop' if 'CENTRAL ' in region else 'region'
 
@@ -132,7 +134,7 @@ def build_position_index_df(
         if 'CENTRAL ' in region:
             # NON-COTTON only for 'CENTRAL ' regions
             if region_analyzer:
-                non_cotton_analyzer = region_analyzer.filter(
+                non_cotton_analyzer = region_analyzer.filter_position_metadata(
                     instrument_name=lambda c: c not in ['CT', 'VV', 'CCL', 'AVY']
                 )
                 pos_data = get_position_data(non_cotton_analyzer)
@@ -145,8 +147,9 @@ def build_position_index_df(
 
             # Per-instrument entries
             for instrument_name in instruments:
+                print(instrument_name)
                 if region_analyzer:
-                    instrument_analyzer = region_analyzer.filter(instrument_name=instrument_name)
+                    instrument_analyzer = region_analyzer.filter_position_metadata(instrument_name=instrument_name)
                     pos_data = get_position_data(instrument_analyzer)
                     records.append({
                         'region_agg': region,
@@ -157,8 +160,9 @@ def build_position_index_df(
 
     # === Per-aggregate entries ===
     for agg_name, regions in region_aggregate_map.items():
+        print(agg_name, regions)
         if pnl_analyzer:
-            agg_analyzer = pnl_analyzer.filter(region=regions)
+            agg_analyzer = pnl_analyzer.filter_position_metadata(region=regions)
 
             level = 'agg'
 
@@ -173,7 +177,7 @@ def build_position_index_df(
 
         # COTTON only for aggregates
         if agg_analyzer:
-            cotton_analyzer = agg_analyzer.filter(
+            cotton_analyzer = agg_analyzer.filter_position_metadata(
                 instrument_name=lambda c: c in ['CT', 'VV', 'CCL', 'AVY', 'EX GIN S6']
             )
             print(f"pos_data: {pos_data}, type: {type(pos_data)}")

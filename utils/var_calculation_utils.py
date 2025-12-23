@@ -10,13 +10,13 @@ def _get_pnl_pivots(analyzer: PnLAnalyzer, values: List[str]) -> Dict[str, pd.Da
     Pivots the PnL data once outside the main aggregation loop for efficiency.
     Returns a dictionary of pivoted DataFrames keyed by the value column name.
     """
-    if not analyzer or analyzer._pos_and_pnl_df.empty:
+    if not analyzer or analyzer.position_df.empty:
         return {v: pd.DataFrame() for v in values}
 
     pivots = {}
 
     # We create a single, efficient pivot on the entire dataset
-    full_pnl_df = analyzer._pos_and_pnl_df.pivot(
+    full_pnl_df = analyzer.pnl_df.pivot(
         index='pnl_date',
         columns='position_index',
         values=values
@@ -36,8 +36,7 @@ def calculate_var_for_regions(var_data_df: pd.DataFrame, analyzer: PnLAnalyzer, 
                               calculation_method: str, cob_date: str, window: int, percentiles: List[int] = [95, 99]) \
         -> pd.DataFrame:
     var_calc = VaRCalculator()
-    pos_and_pnl_df = analyzer._pos_and_pnl_df
-    pos_df = analyzer.position_df
+    position_df = analyzer.position_df
 
     # Step 1: Pivot for all PnL vectors
     pnl_pivots = _get_pnl_pivots(analyzer, ['lookback_pnl', 'inverse_pnl'])
@@ -67,15 +66,15 @@ def calculate_var_for_regions(var_data_df: pd.DataFrame, analyzer: PnLAnalyzer, 
         # Step 2: Position Calculation
         outright_pos = 0
         if outright_positions and len(outright_positions) > 0:
-            outright_pos = pos_df[pos_df['position_index'].isin(outright_positions)]['delta_exposure'].sum()
+            outright_pos = position_df[position_df['position_index'].isin(outright_positions)]['delta_exposure'].sum()
 
         basis_pos = 0
         if basis_positions and len(basis_positions) > 0:
-            basis_pos = pos_df[pos_df['position_index'].isin(basis_positions)]['delta_exposure'].sum()
+            basis_pos = position_df[position_df['position_index'].isin(basis_positions)]['delta_exposure'].sum()
 
         overall_pos = 0
         if overall_positions and len(overall_positions) > 0:
-            overall_pos = pos_df[pos_df['position_index'].isin(overall_positions)]['delta_exposure'].sum()
+            overall_pos = position_df[position_df['position_index'].isin(overall_positions)]['delta_exposure'].sum()
 
         var_data_df.at[i, 'outright_pos'] = int(outright_pos)
         var_data_df.at[i, 'basis_pos'] = int(basis_pos)

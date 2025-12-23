@@ -22,9 +22,11 @@ def generate_wood_combined_position(cob_date: str, instrument_dict: Dict[str, An
 
     physical_loader = PhysicalPositionLoader(date=cob_date, source=uat_engine)
     outright_phy_pos_df = physical_loader.load_wood_phy_position_from_staging(cob_date=cob_date)
+    outright_phy_pos_df = outright_phy_pos_df.rename(columns={'product': 'product_type'})
+    outright_phy_pos_df['product'] = 'wood'
     outright_phy_pos_df['instrument_name'] = 'WOOD AVG'
     outright_phy_pos_df['unit'] = None
-    outright_phy_pos_df['region'] = outright_phy_pos_df['product']
+    outright_phy_pos_df['region'] = outright_phy_pos_df['product_type']
     outright_phy_pos_df['total_active_lots'] = None
     outright_phy_pos_df['settle_delta_1'] = None
     outright_phy_pos_df['product_code'] = outright_phy_pos_df['instrument_name']

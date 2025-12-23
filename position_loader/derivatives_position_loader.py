@@ -30,8 +30,8 @@ class DerivativesPositionLoader(PositionLoader):
         opera_products_sql = "(" + ", ".join(f"'{p}'" for p in opera_products) + ")"
         date_sql = f"'{date}'"
 
-        select_cols = ["pos.cob_date", "sp.subportfolio", "pf.portfolio", "sec.security_id", "sec.strike",
-                       "sec.derivative_type", "sec.currency"]
+        select_cols = ["pos.cob_date", "sec.security_id", "sp.subportfolio", "pf.portfolio", "sec.strike",
+                       "sec.derivative_type", "sec.product_code", "sec.contract_month", "sec.currency"]
         group_by_cols = select_cols.copy()
 
         joins = ["JOIN position_opera.sub_portfolio sp ON pos.sub_portfolio_id = sp.id",

@@ -462,7 +462,7 @@ def build_product_prices_returns_dfs_for_hist_sim(cob_date: str, product: str, w
 
 
 def build_product_prices_returns_dfs_for_mc_sim(cob_date: str, product: str, window: int, simulation_method: str):
-    all_products = ['cotton', 'rubber', 'wood', 'biocane']
+    all_products = ['cotton', 'rubber', 'wood', 'biocane', 'rms']
     if simulation_method == 'mc_sim':
         # Load all products for MC simulation
         products_to_load = all_products

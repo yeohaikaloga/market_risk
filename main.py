@@ -2,7 +2,8 @@ import pandas as pd
 import traceback
 from workflow.var.historical_var_workflow import historical_var_workflow
 from workflow.var.monte_carlo_var_workflow import monte_carlo_var_workflow
-from utils.log_utils import get_logger, load_from_pickle
+from utils.log_utils import setup_logging, get_logger
+from utils.file_utils import get_full_path, load_from_feather_in_dir
 from typing import List, Dict
 
 from position_loader.physical_position_loader import PhysicalPositionLoader
@@ -22,24 +23,57 @@ from workflow.shared.market_data.market_data_workflow import (build_cotlook_rela
                                                               build_average_wood_returns, build_garmmz_sugar_returns,
                                                               build_maize_up_returns, build_biocane_returns)
 from workflow.var.all_product_var_workflow import all_product_var_workflow
+from sensitivity_matrix_loader.sensitivity_matrix_loader import SensitivityMatrixLoader
 
 
 if __name__ == '__main__':
-    # TODO Consider major refactoring into various modules: (1) Historical market data preparation (include repricing for IV); (2) MC simulation; (3) Market data preparation; (4) VaR calculation + report preparation
+
     logger = get_logger(__name__)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
     try:
         logger.info("BEGIN RUN")
 
-        cob_date = '2025-12-08'
+        # cob_date = '2025-12-08'
+        # date_formatted = cob_date.replace('-', '')
+        # base_name = f'eo_simulation_vector_{date_formatted}'
+        # filename_with_ext = f"{base_name}.feather"
+        # try:
+        #     data_frame = load_from_feather_in_dir(cob_date, filename_with_ext)
+        # except Exception as e:
+        #     print(f"ERROR: Could not load EO simulation vector for {cob_date}.")
+        #     raise
+        # print("done")
+        app_name = 'VaR_Calculator_2026'
+        cob_date = '2025-12-12'
+        log_file = 'summary_logs_' + cob_date + '.txt'
+        setup_logging(app_name=app_name, log_filename=log_file)
+        logger = get_logger(__name__)
 
+        all_product_var_workflow(cob_date, product=['rubber'], simulation_method=['hist_sim', 'mc_sim'],
+                                 calculation_method=['linear', 'sensitivity_matrix'])
+        # all_product_var_workflow(
+        #     cob_date,
+        #     product='rms',
+        #     calculation_method=['taylor_series'],
+        #     simulation_method=['hist_sim']
+        # )
+        # TODO save feather file for cotton to only include outright ex JS/US EQ
+        # TODO rollback to old position for wood and biocane when there is no position
+        # TODO print logger, especially warning messages for checking
+        # all_product_var_workflow(
+        #     cob_date,
+        #     product=['biocane', 'wood'],
+        #     calculation_method=['linear'],
+        #     simulation_method=['hist_sim']
+        # )
 
-
-
-
-
-        all_product_var_workflow(cob_date)
+        # all_product_var_workflow(
+        #     cob_date,
+        #     product='rubber',
+        #     calculation_method=['linear', 'sensitivity_matrix'],
+        #     simulation_method=['hist_sim']
+        # )
 
         # relevant_risk_factors = ['CT', 'VV', 'AVY', 'OR', 'JN', 'SRB', 'BDR', 'RG', 'RT', 'AIndex', 'MeOrTe', 'IvCoMa', 'BuFaBo', 'BrCo', 'Shankar6', 'GaSu', 'MaizeUP', 'SawnAvg']
         # filename = 'daily_simulated_matrix_20251201'
@@ -121,7 +155,7 @@ if __name__ == '__main__':
         # historical_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
         #                             calculation_method=calculation_method, window=window,
         #                             with_price_var=False, write_to_excel=True)
-        ## THIS IS FOR BIOCANE VAR
+        # THIS IS FOR BIOCANE VAR
         # product = 'biocane'
         # cob_date = '2025-11-21'
         # simulation_method = 'hist_sim'
@@ -154,5 +188,4 @@ if __name__ == '__main__':
         #                          with_price_var=False, write_to_excel=True)
         logger.info("END RUN")
     except:
-         traceback.print_exc()
-         raise
+        traceback.print_exc()

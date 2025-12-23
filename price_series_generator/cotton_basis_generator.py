@@ -100,11 +100,11 @@ class CottonBasisGenerator(PriceSeriesGenerator):
                 else:
                     ref_year = int(crop_year)
                     ref_next_year = ref_year + 1
-                crop_year_start = pd.Timestamp(f"{ref_year}-08-01")
-                crop_year_end = pd.Timestamp(f"{ref_next_year}-07-31")
-                crop_year_ar_switch = pd.Timestamp(f"{ref_year}-07-31")
+                crop_year_start = pd.Timestamp(f"{ref_year}-07-31")
+                crop_year_end = pd.Timestamp(f"{ref_next_year}-07-30")
+                crop_year_ar_switch = pd.Timestamp(f"{ref_year}-07-30")
                 # next crop year's abs ret starts from last biz day in Jul (based on next crop year's price in first
-                # biz day in Aug)
+                # biz day in Aug) BUT TAKE NOTE THAT date is based on COB date hence one day back.
                 crop_year_ar_switch_dates.append(crop_year_ar_switch)
 
                 # This is to allow Z contract_ref_loader to be taken against current and next crop year
@@ -114,9 +114,9 @@ class CottonBasisGenerator(PriceSeriesGenerator):
 
                 if crop_year_start <= contract_expiry <= crop_year_end or is_ctz_exception:
                     col_name = f"{crop_year.replace('20', '')} vs {contract}"
-                    crop_basis_df[col_name] = crop_basis_df[crop_year].shift(-1) - crop_basis_df[contract]
+                    crop_basis_df[col_name] = crop_basis_df[crop_year] - crop_basis_df[contract] #crop_basis_df[crop_year].shift(-1)
                     crop_basis_df[col_name] = crop_basis_df[col_name].interpolate(method='linear',
-                                                                                  limit_area='inside')
+                                                                                  limit_area='inside').ffill().bfill()
                     crop_basis_df[col_name + ' (sm)'] = \
                         CottonBasisGenerator.smooth_basis(crop_basis_df[col_name], crop_name)[0]
                     crop_basis_df[col_name + ' (sm) w'] = \

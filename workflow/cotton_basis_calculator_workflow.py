@@ -21,10 +21,10 @@ def fy24_cotton_basis_workflow(cob_date: str, window: int, write_to_excel: bool 
     instrument = 'CT'
     derivatives_contract = DerivativesContractRefLoader(instrument_name=instrument, source=prod_engine)
     selected_months = ('H', 'K', 'N', 'Z')
-    #derivatives_contract.load_ref_data(mode='futures')
     futures_contracts = derivatives_contract.load_contracts(mode='futures', relevant_months=selected_months,
                                                             relevant_years=None, relevant_options=None)
-    contract_expiry_dates = derivatives_contract.load_underlying_futures_expiry_dates(mode='futures', contracts=futures_contracts)
+    contract_expiry_dates = derivatives_contract.load_underlying_futures_expiry_dates(mode='futures',
+                                                                                      contracts=futures_contracts)
     roll_days = 14
     contract_roll_dates = {k: v - pd.Timedelta(days=roll_days) for k, v in contract_expiry_dates.items()}
 

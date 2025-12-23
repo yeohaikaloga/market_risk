@@ -3,6 +3,7 @@ import pandas as pd
 from sqlalchemy import text
 from utils.contract_utils import get_month_code, custom_monthly_contract_sort_key
 from datetime import datetime
+from utils.log_utils import get_logger
 
 fy24_unit_to_cotlook_basis_origin_dict = {'USA EQUITY': 'Memphis/Orleans/Texas', 'USA': 'Memphis/Orleans/Texas',
                                           'BRAZIL': 'Brazilian', 'SECO': "Ivory Coast Manbo/s",
@@ -81,6 +82,7 @@ class PhysicalPositionLoader(PositionLoader):
         return df
 
     def load_rubber_phy_position_from_staging(self, cob_date: str) -> pd.DataFrame:
+        logger = get_logger(__name__)
         query = f"""
             SELECT *
             FROM staging.ors_positions
@@ -97,20 +99,48 @@ class PhysicalPositionLoader(PositionLoader):
         #df = df[df['Delta Quantity'] != 0.0]
 
         print(df.head())
-
+        source_list = df['source'].unique()
+        for source in source_list:
+            logger.info(f"{len(df[df['source'] == source])} rubber physical positions with total delta "
+                        f"{df[df['source'] == source]['Delta Quantity'].sum()} from {source}.")
         return df
 
     # TODO finish up this loading of wood phy position
     def load_wood_phy_position_from_staging(self, cob_date: str) -> pd.DataFrame:
-        query = f"""
-            SELECT *
-            FROM staging.wood_physical_positions
-            WHERE date = '{cob_date}'
-        """
-        print(query)
+        logger = get_logger(__name__)
+        current_date_obj = datetime.strptime(cob_date, '%Y-%m-%d')
+        df = pd.DataFrame()
+        # Iterate from 0 to 9 days back to find data
+        for days_back in range(10):
+            target_date = (current_date_obj - pd.Timedelta(days=days_back)).strftime('%Y-%m-%d')
 
-        with self.source.connect() as conn:
-            df = pd.read_sql_query(text(query), conn)
+            try:
+                query = f"""
+                    SELECT *
+                    FROM staging.wood_physical_positions
+                    WHERE date = '{target_date}'
+                """
+
+                with self.source.connect() as conn:
+                    df = pd.read_sql_query(text(query), conn)
+
+                if not df.empty:
+                    if days_back > 0:
+                        logger.warning(f"No wood positions for {cob_date}. Using stale data from {target_date}.")
+                    else:
+                        logger.info(f"Successfully loaded wood positions for {cob_date}.")
+                    break
+
+                logger.info(f"No wood positions for {target_date}, trying previous day...")
+
+            except Exception as e:
+                logger.error(f"Database error for wood fetching on {target_date}: {str(e)}")
+                continue
+
+        # Critical check if no data found after 10 days
+        if df.empty:
+            logger.error(f"Critical: No wood positions found in the last 10 days for {cob_date}.")
+            return pd.DataFrame()
 
         # Apply consistent filters
         df = df[['date', 'position_sawn', 'position_logs']]
@@ -128,19 +158,50 @@ class PhysicalPositionLoader(PositionLoader):
         return df_long
 
     def load_biocane_phy_position_from_staging(self, cob_date: str) -> pd.DataFrame:
-        query = f"""
-            SELECT *
-            FROM staging.bio_cane_positions
-            WHERE date = '{cob_date}'
         """
-        print(query)
+        Retrieves the biocane position. If no data exists for cob_date,
+        it rolls back up to 10 days to find the most recent available position.
+        """
+        logger = get_logger(__name__)
+        current_date_obj = datetime.strptime(cob_date, '%Y-%m-%d')
+        df = pd.DataFrame()
 
-        with self.source.connect() as conn:
-            df = pd.read_sql_query(text(query), conn)
+        # Iterate from 0 to 9 days back
+        for days_back in range(10):
+            target_date = (current_date_obj - pd.Timedelta(days=days_back)).strftime('%Y-%m-%d')
+
+            try:
+                query = f"""
+                    SELECT *
+                    FROM staging.bio_cane_positions
+                    WHERE date = '{target_date}'
+                """
+                with self.source.connect() as conn:
+                    df = pd.read_sql_query(text(query), conn)
+
+                if not df.empty:
+                    if days_back > 0:
+                        logger.warning(f"No data for {cob_date}. Using stale data from {target_date}.")
+                    else:
+                        logger.info(f"Successfully loaded biocane position data for {cob_date}.")
+                    break
+
+                logger.info(f"No records found for {target_date}, trying previous day...")
+
+            except Exception as e:
+                logger.error(f"Database error while fetching date {target_date}: {str(e)}")
+                continue
+
+        if df.empty:
+            logger.error(f"Critical: No biocane positions data found in the last 10 days for {cob_date}.")
+            return pd.DataFrame()
 
         # Apply consistent filters
-        df['exposure in mt'] = pd.to_numeric(df['exposure in mt'], errors='coerce')
-        df = df.rename(columns={'exposure in mt': 'delta'})
+        if 'exposure in mt' in df.columns:
+            df['exposure in mt'] = pd.to_numeric(df['exposure in mt'], errors='coerce')
+        df = df.rename(columns={'exposure in mt': 'delta', 'exposure type': 'exposure'})
+        if 'exposure' in df.columns:
+            df['exposure'] = df['exposure'].astype(str).str.upper()
 
         print(df.head())
 

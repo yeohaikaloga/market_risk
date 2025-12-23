@@ -59,6 +59,7 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
         #deriv_pos_df['instrument_name'] = deriv_pos_df['product_code'].apply(extract_instrument_from_product_code)
         #print(deriv_pos_df['instrument_name'].unique())
         deriv_pos_df['position_type'] = 'DERIVS'
+        deriv_pos_df['derivative_type'] = deriv_pos_df['derivative_type'].str.upper()
         deriv_pos_df['exposure'] = 'OUTRIGHT'
         deriv_pos_df['unit'] = deriv_pos_df['portfolio']
         deriv_pos_df['region'] = deriv_pos_df['portfolio']
@@ -102,18 +103,18 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
     logger.info("STEP 2B completed")
 
     # Step 2C: Combine all positions
-    combined_pos_df = pd.concat(
-        [deriv_pos_df],
-        axis=0,
-        ignore_index=True
-    )
-    combined_pos_df = combined_pos_df.reset_index(drop=True)
-    combined_pos_df['product'] = product
-    combined_pos_df['cob_date'] = cob_date
-    combined_pos_df['return_type'] = 'relative'
-    combined_pos_df['delta_exposure'] = combined_pos_df['delta']
+    # combined_pos_df = pd.concat(
+    #     [deriv_pos_df],
+    #     axis=0,
+    #     ignore_index=True
+    # )
 
-    logger.info(f"STEP 2C completed: Combined {product} position DataFrame generated. Shape: {combined_pos_df.shape}")
-    print(combined_pos_df.head())
+    deriv_pos_df['product'] = product
+    deriv_pos_df['cob_date'] = cob_date
+    deriv_pos_df['return_type'] = 'relative'
+    deriv_pos_df['delta_exposure'] = deriv_pos_df['delta']
 
-    return combined_pos_df
+    logger.info(f"STEP 2C completed: Combined {product} position DataFrame generated. Shape: {deriv_pos_df.shape}")
+    print(deriv_pos_df.head())
+
+    return deriv_pos_df

@@ -94,7 +94,7 @@ class VaRCalculator:
         if simulation_method == 'hist_sim' and (cob_date is None or window is None):
             raise ValueError("For 'hist_sim', both 'cob_date' and 'window' must be provided.")
 
-        if calculation_method not in ['linear', 'sensitivity_matrix', 'repricing']:
+        if calculation_method not in ['linear', 'sensitivity_matrix', 'repricing', 'taylor_series']:
             print(f"Warning: Calculation method '{calculation_method}' is unknown. Proceeding with VaR calculation.")
 
         lookback_total = lookback_df if isinstance(lookback_df, Series) else lookback_df.sum(axis=1)

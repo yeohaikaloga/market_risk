@@ -12,16 +12,19 @@ product_code_to_bbg_futures_category_mapping = {'CM CT': 'Fibers', 'CM VV': 'Fib
                                                 'IM RT': 'Industrial Material', 'CM BDR': 'Industrial Material',
                                                 'CM RG': 'Industrial Material', 'CM C': 'Corn', 'CM CRD': 'Corn',
                                                 'CM AC': 'Corn', 'CM W': 'Wheat', 'CM KW': 'Wheat', 'CM MW': 'Wheat',
-                                                'CM KFP': 'Wheat', 'CM S': 'Soy', 'CM SM': 'Soy', 'CM BO': 'Soy',
-                                                'CM AE': 'Soy', 'CM SRS': 'Soy', 'CM AK': 'Soy', 'CM BP': 'Soy',
-                                                'CM SH': 'Soy', 'CM DL': 'Refined Products',
-                                                'CM QS': 'Refined Products', 'CM THE': 'Refined Products',
-                                                'CM HO': 'Refined Products', 'CM SB': 'Foodstuff', 'CM QW': 'Foodstuff',
+                                                'CM KFP': 'Wheat', 'CM CA': 'Wheat', 'CM S': 'Soy', 'CM SM': 'Soy',
+                                                'CM BO': 'Soy', 'CM AE': 'Soy', 'CM SRS': 'Soy', 'CM AK': 'Soy', 'CM BP': 'Soy',
+                                                'CM SH': 'Soy', 'EG DL': 'Refined Products',
+                                                'EG QS': 'Refined Products', 'EG THE': 'Refined Products',
+                                                'EG HO': 'Refined Products', 'CM SB': 'Foodstuff', 'CM QW': 'Foodstuff',
                                                 'CM DF': 'Foodstuff', 'CM CC': 'Foodstuff', 'CM KC': 'Foodstuff',
                                                 'CM QC': 'Foodstuff', 'CM AX': 'Foodstuff', 'CM KO': 'Foodstuff',
                                                 'CM PAL': 'Foodstuff', 'CM VPC': 'Foodstuff', 'CM MDS': 'Foodstuff',
                                                 'CM DA': 'Foodstuff', 'CM IJ': 'Other Grain', 'CM RS': 'Other Grain',
-                                                'CM ZRR': 'Other Grain', 'CM LHD': 'Livestock'}
+                                                'CM ZRR': 'Other Grain', 'CM LHD': 'Livestock', 'EG EN': 'Crude Oil',
+                                                'EG NG': 'Natural Gas', 'EG XB': 'Refined Products', 'CM LS': 'Livestock',
+                                                'EG CL': 'Crude Oil', 'CM FC': 'Livestock', 'EG CO': 'Crude Oil',
+                                                'CM EP': 'Corn', 'CM LC': 'Livestock'}
 
 _instrument_ref_cache = {}
 
@@ -95,7 +98,7 @@ product_specifications = {'cotton': {'instrument_list': ['CT', 'VV', 'AVY', 'C',
                                                       'W', 'KW', 'MW', 'CA', 'EP', 'IJ', 'RS', 'CRD', 'AX', 'KO', 'OR',
                                                       'AE', 'VV', 'AC', 'LHD', 'SRS', 'PAL', 'RT', 'ZRR', 'AK', 'BP',
                                                       'SH', 'VPC', 'QS', 'THE', 'HO', 'MDS', 'DA', 'BDR', 'KFP', 'LC',
-                                                      'FC', 'LS', 'CO', 'CL', 'EN', 'XB', 'NG'],
+                                                      'FC', 'LS', 'CO', 'CL', 'EN', 'XB'],
                                   'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'daily_fx'},
                                   'mc_sim': {'usd_conversion_mode': 'pre', 'forex_mode': 'cob_date_fx'}},
                           'biocane': {'instrument_list': None,
@@ -105,11 +108,7 @@ product_specifications = {'cotton': {'instrument_list': ['CT', 'VV', 'AVY', 'C',
                                    'hist_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'},
                                    'mc_sim': {'usd_conversion_mode': 'post', 'forex_mode': 'cob_date_fx'}}}
 
-done = ['KC', 'DF', 'CC', 'QC', 'CT', 'SB', 'QW', 'S', 'SM', 'BO', 'C',
-                                                      'W', 'KW', 'MW', 'IJ', 'RS', 'CRD', 'AX', 'KO', 'OR',
-                                                      'AE', 'VV', 'PAL', 'RT', 'ZRR', 'AK', 'BP',
-                                                      'SH', 'VPC', 'DA', 'BDR', 'KFP', ]
-problem = ['CA', 'EP', 'AC', 'LHD', 'SRS', 'QS', 'THE', 'HO', 'MDS', 'LC', 'FC', 'LS', 'CO', 'CL', 'EN', 'XB', 'NG']
+problem_1 = ['NG']
 
 def custom_monthly_contract_sort_key(contract):
     contract_part = contract.replace(' COMB', '').replace(' Comdty', '')

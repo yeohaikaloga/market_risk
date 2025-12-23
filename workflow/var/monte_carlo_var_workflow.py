@@ -9,7 +9,7 @@ from monte_carlo_simulations.simulator import simulate_ret
 import pandas as pd
 import os
 from datetime import datetime
-from utils.log_utils import get_logger, save_to_pickle, load_from_pickle
+from utils.log_utils import get_logger
 
 def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str, calculation_method: str, window: int,
                             with_price_var: bool, write_to_excel: bool):
