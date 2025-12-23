@@ -100,9 +100,7 @@ class PhysicalPositionLoader(PositionLoader):
 
         print(df.head())
         source_list = df['source'].unique()
-        for source in source_list:
-            logger.info(f"{len(df[df['source'] == source])} rubber physical positions with total delta "
-                        f"{df[df['source'] == source]['Delta Quantity'].sum()} from {source}.")
+        logger.info(f"All positions from {source_list} loaded")
         return df
 
     # TODO finish up this loading of wood phy position

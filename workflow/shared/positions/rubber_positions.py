@@ -27,9 +27,6 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     conso_pos_df['portfolio'] = conso_pos_df['portfolio'].astype(str).str.upper()
     source_list = conso_pos_df['source'].unique()
     conso_pos_df['quantity'] = pd.to_numeric(conso_pos_df['quantity'], errors='coerce')
-    for source in source_list:
-        logger.info(f"{len(conso_pos_df[conso_pos_df['source'] == source])} rubber physical positions with total delta "
-                    f"{conso_pos_df[conso_pos_df['source'] == source]['quantity'].sum()} from {source}.")
     conso_pos_df['transaction type'] = 'PHYS'
     conso_pos_df['purchases type'] = conso_pos_df['purchases type'].astype(str).str.upper()
     conso_pos_df['purchases type'] = conso_pos_df['purchases type'].str.replace('PURCHASES', 'PURCHASE')
@@ -83,6 +80,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
             return 'CM OR'
     conso_pos_df['product_code'] = conso_pos_df.apply(
         lambda row: rubber_portfolio_product_code_mapping(row['portfolio']), axis=1)
+
     logger.info("STEP 2A completed")
 
     # Step 2B: Classify position types
@@ -118,11 +116,17 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     # Step 2E: Prepare physical positions for combination
     phy_pos_df = conso_pos_df[(conso_pos_df['position_type'] != 'DERIVS') &
                               (conso_pos_df['trade type'].isin(['FIXED', 'DIFF']))].copy()
+    for source in source_list:
+        logger.info(f"{len(phy_pos_df[phy_pos_df['source'] == source])} rubber physical positions with total delta "
+                    f"{phy_pos_df[phy_pos_df['source'] == source]['quantity'].sum()} from {source}.")
     phy_grouped_pos_df = phy_pos_df.groupby(['unit', 'region', 'typ', 'position_type', 'terminal_month', 'product_code',
                                              'counterparty_parent', 'trader_name', 'product_type', 'source'],
-                                            as_index=False)['quantity'].sum()
+                                            as_index=False, dropna=False)['quantity'].sum()
     phy_grouped_pos_df = phy_grouped_pos_df.rename(columns={'quantity': 'delta'})
     print(len(phy_grouped_pos_df))
+    for source in source_list:
+        logger.info(f"{len(phy_grouped_pos_df[phy_grouped_pos_df['source'] == source])} rubber physical positions with total delta "
+                    f"{phy_grouped_pos_df[phy_grouped_pos_df['source'] == source]['delta'].sum()} from {source}.")
 
     phy_grouped_pos_df = phy_grouped_pos_df[phy_grouped_pos_df['delta'] != 0]
     phy_grouped_pos_df['subportfolio'] = phy_grouped_pos_df['typ']

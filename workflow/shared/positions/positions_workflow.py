@@ -47,6 +47,7 @@ def build_combined_position(cob_date, product, instrument_dict, prices_df, fx_sp
 def prepare_positions_data_for_var(combined_pos_df: pd.DataFrame, price_df: pd.DataFrame, cob_date: str,
                                    simulation_method: str, calculation_method: str, trader: bool, counterparty: bool) \
         -> pd.DataFrame:
+    logger = get_logger(__name__)
     if len(combined_pos_df) > 0:
         combined_pos_df['simulation_method'] = simulation_method
         combined_pos_df['calculation_method'] = calculation_method
@@ -91,7 +92,7 @@ def prepare_positions_data_for_var(combined_pos_df: pd.DataFrame, price_df: pd.D
             combined_pos_df = pos_loader.assign_risk_factor(combined_pos_df)
             na_risk_factor_pos_df = combined_pos_df[~combined_pos_df['risk_factor'].notna()]
             if len(na_risk_factor_pos_df) > 0:
-                print(f"WARNING: {len(na_risk_factor_pos_df)} positions were filtered out due to a missing or None "
+                logger.warning(f"{len(na_risk_factor_pos_df)} positions were filtered out due to a missing or None "
                       f"risk_factor.")
 
             if product == 'cotton':
