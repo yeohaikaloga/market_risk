@@ -4,7 +4,10 @@ import pandas as pd
 from sqlalchemy import text
 import re
 from datetime import datetime
+import numpy as np
+from utils.log_utils import get_logger
 
+logger = get_logger(__name__)
 product_map = {'cotton': ['cto'], 'rms-cfs only': ['cfs'], 'rms': ['cfs', 'rmc'], 'rubber': ['rba', 'rbc']}
 
 class DerivativesPositionLoader(PositionLoader):
@@ -558,10 +561,70 @@ class DerivativesPositionLoader(PositionLoader):
         # Detect missing prices
         missing = position_df['cob_date_price'].isna()
         if missing.any():
-            print(f"[WARN] {missing.sum()} positions missing cob_date_price:")
+            logger.warning(f"{missing.sum()} positions missing cob_date_price:")
             print(position_df[missing][['generic_curve']])
         else:
             print("All positions mapped to cob_date_price.")
 
         return position_df
 
+
+    def load_rms_screen(self):
+
+        query = f"""
+                SELECT * from staging.opera_sensitivities_rms osr
+                WHERE settlement_date = '{self.date}'
+                """
+        with self.source.connect() as conn:
+            df = pd.read_sql_query(text(query), conn)
+        print(query)
+        return df
+    def assign_risk_factors_for_rms_screen(self, deriv_pos_df: pd.DataFrame, price_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Assigns risk_factor based on continuation series with a fallback mechanism.
+        If the resolved series (e.g., SM8) is not in price_df, it falls back to
+        the highest available previous number (e.g., SM7, SM6...).
+        """
+        # 1. Apply primary logic provided
+        deriv_pos_df['risk_factor'] = np.where(
+            deriv_pos_df['option_continuation_series'].isna(),
+            deriv_pos_df['future_continuation_series'],
+            deriv_pos_df['option_continuation_series']
+        )
+
+        available_columns = set(price_df.columns)
+
+        def get_best_available_ticker(ticker):
+            if pd.isna(ticker) or ticker in available_columns:
+                return ticker
+
+            # Regex to split ticker into root and number (e.g., "SM" and "8")
+            match = re.match(r"([a-zA-Z\s]+)(\d+)", str(ticker))
+            if not match:
+                return ticker  # Cannot parse, return as is (will likely result in NaN later)
+
+            root, num_str = match.groups()
+            num = int(num_str)
+
+            # Iteratively look back from num-1 down to 1
+            for i in range(num - 1, 0, -1):
+                fallback_ticker = f"{root}{i}"
+                if fallback_ticker in available_columns:
+                    return fallback_ticker
+
+            return ticker  # No fallback found, return original
+
+        # 2. Apply the fallback logic to items not found in columns
+        # We only apply this to unique values that are actually missing to optimize performance
+        missing_targets = set(deriv_pos_df['risk_factor'].dropna().unique()) - available_columns
+
+        if missing_targets:
+            mapping = {t: get_best_available_ticker(t) for t in missing_targets}
+            deriv_pos_df['risk_factor'] = deriv_pos_df['risk_factor'].replace(mapping)
+
+            # Optional: Log the substitutions for transparency
+            for original, substituted in mapping.items():
+                if original != substituted:
+                    logger.warning(f"Fallback: {original} not in price_df, using {substituted} instead.")
+
+        return deriv_pos_df

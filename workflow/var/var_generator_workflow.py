@@ -191,7 +191,8 @@ def build_position_index_df(
 
     return pd.DataFrame.from_records(records)
 
-def generate_var(product, combined_pos_df, long_pnl_df, simulation_method, calculation_method, cob_date, window) -> pd.DataFrame:
+def generate_var(product, combined_pos_df, long_pnl_df, simulation_method, calculation_method, cob_date, window) \
+        -> pd.DataFrame:
 
     # Step 1: Build analyzer
     pnl_analyzer = PnLAnalyzer(long_pnl_df, combined_pos_df)
@@ -207,16 +208,21 @@ def generate_var(product, combined_pos_df, long_pnl_df, simulation_method, calcu
     elif product == 'wood':
         region_aggregate_map = get_wood_aggregates(combined_pos_df['region'].unique())
 
-
     var_data_df = build_position_index_df(pnl_analyzer, region_aggregate_map)
     # Step 3: Run VaR calculation
+    if product == 'rms':
+        two_tail = False
+    else:
+        two_tail = True
+    print(product, two_tail)
     var_data_df = calculate_var_for_regions(
         var_data_df=var_data_df,
         analyzer=pnl_analyzer,
         simulation_method=simulation_method,
         calculation_method=calculation_method,
         cob_date=cob_date,
-        window=window
+        window=window,
+        two_tail=two_tail
     )
 
     return var_data_df
@@ -362,7 +368,8 @@ def build_cotton_var_report_exceptions(long_pnl_df: pd.DataFrame, combined_pos_d
         simulation_method=simulation_method,
         calculation_method=calculation_method,
         cob_date=cob_date,
-        window=window
+        window=window,
+        two_tail=True
     )
     sum_origin_ov = exception_cotton_var_data_df[
         exception_cotton_var_data_df['region_agg'] == 'SUM ORIGIN EX CP/JS/US EQ'

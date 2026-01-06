@@ -3,7 +3,8 @@ from db.db_connection import get_engine
 from position_loader.position_loader import PositionLoader
 from workflow.shared.positions.cotton_positions import generate_cotton_combined_position
 from workflow.shared.positions.rubber_positions import generate_rubber_combined_position
-from workflow.shared.positions.rms_positions import generate_rms_combined_position
+from workflow.shared.positions.rms_positions import generate_rms_combined_position, generate_rms_combined_position_from_screen
+from quality_checker.rms_check import check_rms_positions_against_opera_screen
 from workflow.shared.positions.biocane_positions import generate_biocane_combined_position
 from workflow.shared.positions.wood_positions import generate_wood_combined_position
 from utils.log_utils import get_logger

@@ -87,7 +87,7 @@ def build_instrument_generic_curves(instrument_list: list, cob_date: str, window
             df=price_df,
             futures_contract=derivatives_contract
         )
-        max_position = 11 if instrument_name == 'CT' else 6  # CT goes up to CT13, others to xx6
+        max_position = 11 if instrument_name == 'CT' else 12  # CT goes up to CT11, others to xx12
 
         generic_curves_df, active_contracts_df = curve_generator.generate_generic_curves_df_up_to(
             max_position=max_position,
@@ -354,7 +354,7 @@ def build_product_prices_returns_dfs_for_hist_sim(cob_date: str, product: str, w
     instrument_list = product_specifications[product]['instrument_list']
     usd_conversion_mode = product_specifications[product][simulation_method]['usd_conversion_mode']
     forex_mode = product_specifications[product][simulation_method]['forex_mode']
-    fx_spot_df = load_forex(cob_date=cob_date, window=window+1)
+    fx_spot_df = load_forex(cob_date=cob_date, window=window+1, type='CMPL')
 
     prices_days_list = get_prev_biz_days_list(cob_date, window+1)
     returns_days_list = get_prev_biz_days_list(cob_date, window)
@@ -472,7 +472,7 @@ def build_product_prices_returns_dfs_for_mc_sim(cob_date: str, product: str, win
 
     usd_conversion_mode = product_specifications[product][simulation_method]['usd_conversion_mode']
     forex_mode = product_specifications[product][simulation_method]['forex_mode']
-    fx_spot_df = load_forex(cob_date=cob_date, window=window+1)
+    fx_spot_df = load_forex(cob_date=cob_date, window=window+1, type='CMPL')
 
     # --- STEP 2: Aggregate ALL instruments across the loading scope ---
     combined_instrument_list = []

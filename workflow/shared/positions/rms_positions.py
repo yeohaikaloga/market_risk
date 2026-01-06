@@ -1,14 +1,18 @@
 import pandas as pd
 import numpy as np
 from typing import Dict, Any
+from sqlalchemy import text
 from db.db_connection import get_engine
 from position_loader.derivatives_position_loader import DerivativesPositionLoader
 from utils.contract_utils import (load_instrument_ref_dict, extract_instrument_from_product_code)
 from utils.log_utils import get_logger
+from workflow.shared.forex_workflow import load_forex
+import re
 
+logger = get_logger(__name__)
 def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any], prices_df: pd.DataFrame,
                                    fx_spot_df: pd.DataFrame) -> pd.DataFrame:
-    logger = get_logger(__name__)
+
     uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
     product = 'rms'
     instrument_ref_dict = load_instrument_ref_dict('uat')
@@ -88,7 +92,8 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
                 deriv_pos_df['total_active_lots'] *
                 (deriv_pos_df['settle_gamma_11'] + deriv_pos_df['settle_gamma_12'] + deriv_pos_df['settle_gamma_21'] +
                  deriv_pos_df['settle_gamma_22']) *
-                deriv_pos_df['to_USD_conversion'] ** 2
+                deriv_pos_df['lots_to_MT_conversion'] *
+                deriv_pos_df['to_USD_conversion']
         )
         deriv_pos_df['vega'] = (
                 deriv_pos_df['total_active_lots'] *
@@ -117,4 +122,37 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
     logger.info(f"STEP 2C completed: Combined {product} position DataFrame generated. Shape: {deriv_pos_df.shape}")
     print(deriv_pos_df.head())
 
+    return deriv_pos_df
+
+
+def generate_rms_combined_position_from_screen(cob_date: str, instrument_dict: Dict[str, Any], prices_df: pd.DataFrame,
+                                               fx_spot_df: pd.DataFrame) -> pd.DataFrame:
+    uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
+    instrument_ref_dict = load_instrument_ref_dict('uat')
+    derivatives_loader = DerivativesPositionLoader(date=cob_date, source=uat_engine)
+    deriv_pos_df = derivatives_loader.load_rms_screen()
+    deriv_pos_df = derivatives_loader.assign_risk_factors_for_rms_screen(deriv_pos_df, prices_df)
+    deriv_pos_df = deriv_pos_df.rename(columns={'invenio_product_code': 'product_code', 'delta_screen': 'delta',
+                                                'gamma_screen': 'gamma', 'theta_screen': 'theta',
+                                                'vega_screen': 'vega'})
+    deriv_pos_df['instrument_name'] = (
+        deriv_pos_df['product_code']
+        .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
+    )
+    deriv_pos_df['region'] = deriv_pos_df['subportfolio']
+    deriv_pos_df['generic_curve'] = deriv_pos_df['risk_factor']
+    deriv_pos_df['product'] = 'rms'
+    deriv_pos_df['cob_date'] = cob_date
+    deriv_pos_df['cob_date_fx'] = 1
+    deriv_pos_df['position_type'] = 'DERIVS'
+    deriv_pos_df['exposure'] = 'OUTRIGHT'
+    deriv_pos_df['return_type'] = 'relative'
+    deriv_pos_df = derivatives_loader.assign_cob_date_price(deriv_pos_df, prices_df, cob_date)
+    deriv_pos_df['to_USD_conversion'] = 1
+    deriv_pos_df['currency'] = deriv_pos_df['product_code'].apply(
+        lambda x: instrument_ref_dict.get(x, {}).get('currency').upper()
+    )
+    deriv_pos_df["delta"] = pd.to_numeric(deriv_pos_df["delta"], errors='coerce').fillna(0.0)
+    deriv_pos_df["gamma"] = pd.to_numeric(deriv_pos_df["gamma"], errors='coerce').fillna(0.0)
+    deriv_pos_df['delta_exposure'] = deriv_pos_df['delta']
     return deriv_pos_df

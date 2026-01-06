@@ -5,7 +5,7 @@ import pandas as pd
 from utils.date_utils import get_prev_biz_days_list
 from utils.forex_utils import invert_selected_fx
 
-def load_forex(cob_date, window):
+def load_forex(cob_date, window, type):
     uat_engine = get_engine('uat')
     days_list = get_prev_biz_days_list(cob_date, window + 1)
     fx = ForexRefLoader(source=uat_engine)
@@ -13,7 +13,6 @@ def load_forex(cob_date, window):
     quote_ccy = ['BRL', 'MYR', 'MXN', 'COP', 'CNH', 'CNY', 'THB', 'IDR', 'JPY', 'INR', 'CAD']
     base_ccy = ['EUR', 'GBP', 'AUD', 'NZD']
     fwd_mon = 'NULL'
-    type = 'CMPL'
 
     #USD as base
     fx.load_metadata(

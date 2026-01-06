@@ -90,7 +90,7 @@ def generate_linear_pnl(combined_pos_df: pd.DataFrame, percentage_returns_df: pd
     return out
 
 
-def generate_taylor_pnl(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame) -> pd.DataFrame:
+def generate_taylor_series_pnl(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame) -> pd.DataFrame:
     """
     Refactored Taylor series PnL calculation.
     Expected returns_df shape: Index = Dates, Columns = Generic Curves (or Risk Factors)
@@ -129,7 +129,13 @@ def generate_taylor_pnl(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame)
 
         # pnl = delta * r + gamma * r^2 + theta
         # Note: theta is usually daily, so we add it to every scenario date
-        pnl_series = (row.delta * r_vector) + (row.gamma * r2_vector) + row.theta
+        #abs return: pnl_series = (row.delta * r_vector) + (row.gamma * r2_vector)
+        delta_times_price = row.delta * row.cob_date_price
+        gamma_times_price_sq = 0.5 * row.gamma * row.cob_date_price ** 2
+        pnl_series = (
+                delta_times_price * r_vector
+                + gamma_times_price_sq * r2_vector
+        )
 
         # Create a temporary DF to collect results
         tmp = pd.DataFrame({
@@ -324,7 +330,7 @@ def generate_pnl_vectors(combined_pos_df: pd.DataFrame, returns_df: pd.DataFrame
     if method == "linear":
         return generate_linear_pnl(combined_pos_df, returns_df)
     elif method == "taylor_series":
-        return generate_taylor_pnl(combined_pos_df, returns_df)
+        return generate_taylor_series_pnl(combined_pos_df, returns_df)
     elif method == "sensitivity_matrix":
         return generate_sensitivity_repricing_pnl(combined_pos_df, returns_df)
     elif method == "repricing":
@@ -456,7 +462,13 @@ def analyze_and_export_unit_pnl(
         )
 
         feather_df['level 15'] = product.capitalize()
-        if product == 'rubber':
+        if product == 'cotton':
+            # only consider Sum Cotton (ex JS, US Eq OR)
+            logger.info(f"{product} has total {len(feather_df)} positions")
+            feather_df = feather_df[~((feather_df['region'] == 'USA EQUITY') & (feather_df['exposure'] == 'OUTRIGHT'))]
+            logger.info(f"{product} only includes {len(feather_df)} Sum Cotton (ex JS, US Eq OR) positions")
+
+        elif product == 'rubber':
             condition_ivc = (feather_df['region'] == 'IVC MANUFACTURING')
             feather_df.loc[condition_ivc, 'level 14'] = 'Midstream'
             feather_df.loc[~condition_ivc, 'level 14'] = 'Trading & Supply Chain'
@@ -470,6 +482,6 @@ def analyze_and_export_unit_pnl(
             # 3. Define the feather path and export
         feather_path = full_path.replace('.xlsx', '.feather')
         feather_df.to_feather(feather_path)
-        logger.info(f'STEP 3A-7: Position and PnL vectors exported to Feather: {feather_path}')
+        logger.info(f'STEP 3A-7: {len(feather_df)} Position and PnL vectors exported to Feather: {feather_path}')
 
     return {}

@@ -2,30 +2,18 @@ import logging
 import sys
 import os
 import io
+import colorlog
 
-
-def get_logger(name: str, level=logging.INFO):
-    """Standard logger setup."""
-    logger = logging.getLogger(name)
-
-    if not logger.handlers:
-        logger.setLevel(level)
-        formatter = logging.Formatter(
-            fmt="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    return logger
-
+_APP_NAME_STORE = None
 
 def setup_logging(app_name="default_app_name", log_filename="run_summary.txt"):
     """
-    Sets up a logger that captures everything in memory for a final export
-    while still printing to the console.
+    Called ONCE in main.py to set the 'Identity' of the app
+    and configure where logs go.
     """
+    global _APP_NAME_STORE
+    _APP_NAME_STORE = app_name
+
     logger = logging.getLogger(app_name)
     logger.setLevel(logging.INFO)
 
@@ -37,19 +25,32 @@ def setup_logging(app_name="default_app_name", log_filename="run_summary.txt"):
     log_buffer = io.StringIO()
 
     # 3. Define Formatter
-    formatter = logging.Formatter(
+    standard_formatter = logging.Formatter(
         fmt="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
     # 4. Console Handler (so you see it live)
     console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
+    color_formatter = colorlog.ColoredFormatter(
+        "%(log_color)s%(levelname)-8s%(reset)s %(blue)s%(message)s",
+        datefmt=None,
+        reset=True,
+        log_colors={
+            'DEBUG': 'cyan',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'red,bg_white',
+        },
+        style='%'
+    )
+    console_handler.setFormatter(color_formatter)
     logger.addHandler(console_handler)
 
-    # 5. Buffer Handler (for the final export)
+    # 5. Buffer Handler (No colors here, so the exported file is readable)
     buffer_handler = logging.StreamHandler(log_buffer)
-    buffer_handler.setFormatter(formatter)
+    buffer_handler.setFormatter(standard_formatter)
     logger.addHandler(buffer_handler)
 
     def export_logs():
@@ -64,6 +65,18 @@ def setup_logging(app_name="default_app_name", log_filename="run_summary.txt"):
             log_buffer.close()
 
     return logger, export_logs
+
+
+def get_logger(name: str, level=logging.INFO):
+    """
+    Used in every other file.
+    It checks what 'app_name' was set in setup_logging.
+    """
+    # If setup_logging hasn't been called yet, it defaults to the module name.
+    # If it HAS, it returns "YourAppName.module_name"
+    prefix = f"{_APP_NAME_STORE}." if _APP_NAME_STORE else ""
+    return logging.getLogger(f"{prefix}{name}")
+
 
 # def save_to_pickle(data, filename: str):
 #     """Saves data to a pickle file."""

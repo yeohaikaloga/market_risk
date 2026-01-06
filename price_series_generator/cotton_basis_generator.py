@@ -94,6 +94,7 @@ class CottonBasisGenerator(PriceSeriesGenerator):
         for contract in self.futures_price_df.columns:
             full_contract_name = contract + ' Comdty'
             contract_expiry = self.contract_expiry_dates[full_contract_name]
+            contract_roll = self.contract_roll_dates[full_contract_name]
             for crop_year in crop_price_df_by_year.columns:
                 if physical_contract.params.get("crop_year_type") == 'cross':
                     ref_year, ref_next_year = map(int, crop_year.split("/"))
@@ -112,7 +113,7 @@ class CottonBasisGenerator(PriceSeriesGenerator):
                 is_ctz_exception = (contract[2] == 'Z' and (contract_year == ref_next_year or
                                                             contract_year == ref_year))
 
-                if crop_year_start <= contract_expiry <= crop_year_end or is_ctz_exception:
+                if crop_year_start <= contract_roll <= crop_year_end or is_ctz_exception:
                     col_name = f"{crop_year.replace('20', '')} vs {contract}"
                     crop_basis_df[col_name] = crop_basis_df[crop_year] - crop_basis_df[contract] #crop_basis_df[crop_year].shift(-1)
                     crop_basis_df[col_name] = crop_basis_df[col_name].interpolate(method='linear',
@@ -131,10 +132,17 @@ class CottonBasisGenerator(PriceSeriesGenerator):
         print(crop_basis_df.head())
         print(basis_index)
 
-        sorted_all_switch_dates = (sorted(
-                    dates for dates in set(self.contract_roll_dates.values()).union(crop_year_ar_switch_dates)
-                    if pd.Timestamp(start_date) <= dates <= pd.Timestamp(self.cob_date))
-                                   + [pd.Timestamp(self.cob_date)])
+        # sorted_all_switch_dates = (sorted(
+        #             dates for dates in set(self.contract_roll_dates.values()).union(crop_year_ar_switch_dates)
+        #             if pd.Timestamp(start_date) <= dates <= pd.Timestamp(self.cob_date))
+        #                            + [pd.Timestamp(self.cob_date)])
+        filtered_roll_dates = [
+            d for d in self.contract_roll_dates.values()
+            if pd.Timestamp(start_date) <= d <= pd.Timestamp(self.cob_date)
+        ]
+        all_dates_set = set(filtered_roll_dates).union(crop_year_ar_switch_dates)
+        all_dates_set.add(pd.Timestamp(self.cob_date))
+        sorted_all_switch_dates = sorted(list(all_dates_set))
         print(sorted_all_switch_dates)
 
         abs_ret_conditions = ([basis_index < sorted_all_switch_dates[0]] +

@@ -1,4 +1,5 @@
 import pandas as pd
+import pickle
 import traceback
 from workflow.var.historical_var_workflow import historical_var_workflow
 from workflow.var.monte_carlo_var_workflow import monte_carlo_var_workflow
@@ -24,15 +25,25 @@ from workflow.shared.market_data.market_data_workflow import (build_cotlook_rela
                                                               build_maize_up_returns, build_biocane_returns)
 from workflow.var.all_product_var_workflow import all_product_var_workflow
 from sensitivity_matrix_loader.sensitivity_matrix_loader import SensitivityMatrixLoader
+from workflow.cotton_basis_calculator_workflow import fy24_cotton_basis_workflow
 
+print("DEBUG: Script started loading...") # Sanity check 1
 
 if __name__ == '__main__':
-
-    logger = get_logger(__name__)
+    print("DEBUG: Entered __main__ block")  # Sanity check 2
+    root_logger = get_logger(__name__)
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
+    export_logs = None
     try:
-        logger.info("BEGIN RUN")
+        print("DEBUG: Starting Try block")
+        root_logger.info("BEGIN RUN")
+
+        # path = "J:\RISK\RISK CENTRAL SINGAPORE\Risk Reports created by RO\Cotton\Cotton_timeseries\daily_simulated_matrix_20260102.pickle"
+        # # path = r"C:\Users\haikal.yeo\OneDrive - Olam Global Agri Pte Ltd\Desktop\test\daily_simulated_2020102.pickle"
+        # with open(path, 'rb') as f:
+        #     data = pickle.load(f)
+        # print('done')
 
         # cob_date = '2025-12-08'
         # date_formatted = cob_date.replace('-', '')
@@ -45,22 +56,32 @@ if __name__ == '__main__':
         #     raise
         # print("done")
         app_name = 'VaR_Calculator_2026'
-        cob_date = '2025-12-12'
-        log_file = 'summary_logs_' + cob_date + '.txt'
-        setup_logging(app_name=app_name, log_filename=log_file)
-        logger = get_logger(__name__)
+        cob_date = '2026-01-02'
+        #fy24_cotton_basis_workflow(cob_date, 260)
+        log_file = f'summary_logs_for_{app_name}_{cob_date}.txt'
+        print("DEBUG: Setting up logging...")
+        workflow_logger, export_logs = setup_logging(app_name=app_name, log_filename=log_file)
 
-        all_product_var_workflow(cob_date, product=['rubber'], simulation_method=['hist_sim', 'mc_sim'],
+        # all_product_var_workflow(cob_date)
+        # all_product_var_workflow(cob_date, product=['rms'], simulation_method=['hist_sim', 'mc_sim'],
+        #                          calculation_method=['taylor_series'])
+        # data = pd.read_feather(r'C:\Users\haikal.yeo\OneDrive - Olam Global Agri Pte Ltd\Fibre, Agri-Industrials & Ag Services\market_risk\reference\pnl_portfolio_taylor_relative_2025-12-19.feather')
+        # data.to_csv('pnl_portfolio_taylor_relative_2025-12-19.csv')
+        print("DEBUG: Starting all_product_var_workflow...")
+        all_product_var_workflow(cob_date, product=['cotton', 'rubber', 'wood', 'biocane'], simulation_method=['mc_sim'],
                                  calculation_method=['linear', 'sensitivity_matrix'])
+        #TODO fix mapping of options to correct curve, particularly for RMS.
+        #TODO Adjust file path so that Jaya can run on his side
+        print("DEBUG: Workflow finished successfully")
+        workflow_logger.info("END RUN")
+        if export_logs:
+            export_logs()
         # all_product_var_workflow(
         #     cob_date,
         #     product='rms',
         #     calculation_method=['taylor_series'],
         #     simulation_method=['hist_sim']
         # )
-        # TODO save feather file for cotton to only include outright ex JS/US EQ
-        # TODO rollback to old position for wood and biocane when there is no position
-        # TODO print logger, especially warning messages for checking
         # all_product_var_workflow(
         #     cob_date,
         #     product=['biocane', 'wood'],
@@ -186,6 +207,22 @@ if __name__ == '__main__':
         # monte_carlo_var_workflow(cob_date=cob_date, product=product, simulation_method=simulation_method,
         #                          calculation_method=calculation_method, window=window,
         #                          with_price_var=False, write_to_excel=True)
-        logger.info("END RUN")
-    except:
+    except Exception as e:
+        # 1. Use the specific Exception class
+        # 2. Print to console explicitly
+        print("\n" + "=" * 50)
+        print("CRITICAL ERROR DETECTED:")
         traceback.print_exc()
+        print("=" * 50 + "\n")
+
+        # 3. Also try to log it to the file if the logger exists
+        if 'workflow_logger' in locals():
+            workflow_logger.error(f"Execution failed: {e}", exc_info=True)
+            if export_logs:
+                try:
+                    export_logs()
+                except:
+                    pass
+
+            # 3. MANDATORY: Re-raise the error so the process exits with code 1
+        raise

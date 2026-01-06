@@ -10,7 +10,7 @@ from contract_ref_loader.physical_contract_ref_loader import PhysicalContractRef
 from contract_ref_loader.physical_contract_ref_loader import crop_dict
 
 
-def fy24_cotton_basis_workflow(cob_date: str, window: int, write_to_excel: bool = True, apply_smoothing: bool = True):
+def fy24_cotton_basis_workflow(cob_date: str, window: int = 260, write_to_excel: bool = True, apply_smoothing: bool = True):
     prod_engine = get_engine('prod')
     trailing_days_before_start = 20
     no_of_days = window + trailing_days_before_start

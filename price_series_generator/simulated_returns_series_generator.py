@@ -1,7 +1,7 @@
 from price_series_generator.price_series_generator import PriceSeriesGenerator
 import pandas as pd
 from typing import List
-from utils.file_utils import load_from_pickle_in_dir
+from utils.file_utils import load_from_pickle_in_dir, load_from_csv_in_dir
 
 
 
@@ -95,9 +95,13 @@ class SimulatedReturnsSeriesGenerator(PriceSeriesGenerator):
             filename (str): The filename of the pickle file (e.g., 'daily_simulated_matrix_20251210.pickle').
             relevant_risk_factors (List[str]): The list of base risk factors to filter by (e.g., ['CT', 'VV']).
         """
-        dict_file = load_from_pickle_in_dir(cob_date, filename)
-        returns_df = dict_file["simulatedRet_df_ld"]
+        # dict_file = load_from_pickle_in_dir(cob_date, filename)
+        # returns_df = dict_file["simulatedRet_df_ld"]
+        returns_df = load_from_csv_in_dir(cob_date, filename) # TEMP FIX!
+        print('done 1')
         returns_df = cls.filter_relevant_risk_factors(returns_df, relevant_risk_factors)
+        print('done 2')
         returns_df = cls.rename_simulated_columns(returns_df)
+        print('done 3')
         return cls(returns_df, cob_date)
 

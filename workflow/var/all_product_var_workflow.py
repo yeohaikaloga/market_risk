@@ -17,6 +17,7 @@ from db.db_connection import get_engine
 import shutil
 from typing import List, Optional, Union, Dict, Any
 
+logger = get_logger(__name__)
 def all_product_var_workflow(cob_date: str, product: Optional[Union[str, List[str]]] = None,
                              calculation_method: Optional[Union[str, List[str]]] = None,
                              simulation_method: Optional[Union[str, List[str]]] = None):
@@ -24,7 +25,6 @@ def all_product_var_workflow(cob_date: str, product: Optional[Union[str, List[st
     Performs VaR workflow, optionally filtered by specific product(s),
     calculation method(s), or simulation method(s).
     """
-    logger = get_logger(__name__)
     product_dict = {'cotton': {'simulation_method': ['hist_sim', 'mc_sim'], 'calculation_method': ['linear', 'sensitivity_matrix']},
                     'rubber': {'simulation_method': ['hist_sim', 'mc_sim'], 'calculation_method': ['linear', 'sensitivity_matrix']},
                     'biocane': {'simulation_method': ['hist_sim', 'mc_sim'], 'calculation_method': ['linear']},
@@ -105,7 +105,6 @@ def all_product_var_workflow(cob_date: str, product: Optional[Union[str, List[st
 
 
 def historical_market_data_preparation_workflow(cob_date: str, save_to_pickle: bool, save_to_csv: bool):
-    logger = get_logger(__name__)
     product = 'cotton' #TODO Need to look into this! If simulation_method == 'mc_sim', then product is irrelevant.
     window = 260
     simulation_method = 'mc_sim'
@@ -142,8 +141,7 @@ def historical_market_data_preparation_workflow(cob_date: str, save_to_pickle: b
         save_to_csv_in_dir(instrument_dict, cob_date, f'instrument_dict_{cob_date}.csv')
 
 
-def product_position_workflow(cob_date: str, product: str, calculation_method:str, simulation_method:str):
-    logger = get_logger(__name__)
+def product_position_workflow(cob_date: str, product: str, calculation_method: str, simulation_method: str):
     prices_df = load_from_pickle_in_dir(cob_date, f'prices_{cob_date}.pkl')
     fx_spot_df = load_from_pickle_in_dir(cob_date, f'fx_spot_{cob_date}.pkl')
     instrument_dict = load_from_pickle_in_dir(cob_date, f'instrument_dict_{cob_date}.pkl')
@@ -165,51 +163,49 @@ def product_position_workflow(cob_date: str, product: str, calculation_method:st
         save_to_csv_in_dir(combined_price_pos_df, cob_date, f'combined_price_pos_{cob_date}.csv')
 
 def monte_carlo_market_data_preparation_workflow(cob_date: str):
-    logger = get_logger(__name__)
-    simulated_returns_filename = 'daily_simulated_matrix_' + cob_date.replace('-', '') + '.pickle'
-    destination_path = get_full_path(cob_date, simulated_returns_filename)
-    file_exist = os.path.exists(destination_path)
-    if not file_exist:
-        dir_date = cob_date.replace('-', '')
-        backup_dir = r"C:\Users\haikal.yeo\OneDrive - Olam Global Agri Pte Ltd\OGA_MR_GOO - Daily Time Series - Universe"
-        dir = os.path.join(backup_dir, dir_date)
-        source_path = os.path.join(dir, simulated_returns_filename)
-        if os.path.exists(source_path):
-            try:
-                # Copy the file from the backup location to the output directory
-                shutil.copy2(source_path, destination_path)
-                logger.info(f"Successfully copied missing simulated returns matrix from backup: {source_path}")
-            except Exception as e:
-                logger.error(f"Error copying file {source_path} to {destination_path}: {e}")
-                raise RuntimeError(f"Failed to copy required simulation file for {cob_date}.")
-        else:
-            error_msg = (f"Error: Required simulated returns file '{simulated_returns_filename}' is "
-                         f"missing in the output directory and backup location ({dir}). "
-                         f"Cannot proceed with 'mc_sim'.")
-            logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
-    else:
-        logger.info(f"Simulated return matrix for {cob_date} already in folder.")
-
+    # simulated_returns_filename = 'daily_simulated_matrix_' + cob_date.replace('-', '') + '.pickle'
+    # destination_path = get_full_path(cob_date, simulated_returns_filename)
+    # file_exist = os.path.exists(destination_path)
+    # if not file_exist:
+    #     dir_date = cob_date.replace('-', '')
+    #     backup_dir = r"C:\Users\haikal.yeo\OneDrive - Olam Global Agri Pte Ltd\OGA_MR_GOO - Daily Time Series - Universe"
+    #     dir = os.path.join(backup_dir, dir_date)
+    #     source_path = os.path.join(dir, simulated_returns_filename)
+    #     if os.path.exists(source_path):
+    #         try:
+    #             # Copy the file from the backup location to the output directory
+    #             shutil.copy2(source_path, destination_path)
+    #             logger.info(f"Successfully copied missing simulated returns matrix from backup: {source_path}")
+    #         except Exception as e:
+    #             logger.error(f"Error copying file {source_path} to {destination_path}: {e}")
+    #             raise RuntimeError(f"Failed to copy required simulation file for {cob_date}.")
+    #     else:
+    #         error_msg = (f"Error: Required simulated returns file '{simulated_returns_filename}' is "
+    #                      f"missing in the output directory and backup location ({dir}). "
+    #                      f"Cannot proceed with 'mc_sim'.")
+    #         logger.error(error_msg)
+    # else:
+    #     logger.info(f"Simulated return matrix for {cob_date} already in folder.")
+    #returns_df = load_from_csv_in_dir(cob_date, f'simulatedRet_df_ld_20260102.csv')
     relevant_risk_factors = (['CT', 'VV', 'AVY', 'OR', 'JN', 'SRB', 'BDR', 'RG', 'RT', 'C', 'W', 'S', 'AIndex',
                              'MeOrTe', 'IvCoMa', 'BuFaBo', 'BrCo', 'Shankar6', 'GaSu', 'MaizeUP', 'SawnAvg'] +
                              product_specifications['rms']['instrument_list'])
     mc_returns_generator = (SimulatedReturnsSeriesGenerator.
-                            load_relevant_simulated_returns(cob_date, simulated_returns_filename,
+                            load_relevant_simulated_returns(cob_date, 'simulatedRet_df_ld_20260102.csv', #simulated_returns_filename,
                                                             relevant_risk_factors))
     returns_df = mc_returns_generator.price_df
-    # returns_df = load_from_pickle_in_dir(cob_date, f'hist_relative_returns_{cob_date}.pkl')
+    #returns_df = load_from_pickle_in_dir(cob_date, f'hist_relative_returns_{cob_date}.pkl')
+
     return returns_df
 
 def sensitivity_matrix_preparation_workflow(cob_date: str, product: str):
-    logger = get_logger(__name__)
     uat_engine = get_engine('uat')
     if product in ['cotton', 'rubber']:
         sensitivity_matrix = SensitivityMatrixLoader(cob_date, product, uat_engine)
         sensitivity_matrix.load_sensitivity_matrix(product)
         return sensitivity_matrix
+
 def pnl_and_var_workflow(cob_date: str, product: str, calculation_method: str, simulation_method: str):
-    logger = get_logger(__name__)
     excel_filename = f'{calculation_method}_{simulation_method}_{product}_var_{cob_date}.xlsx'
     window = 260
     full_path_to_excel = get_full_path(cob_date, excel_filename)
@@ -233,7 +229,7 @@ def pnl_and_var_workflow(cob_date: str, product: str, calculation_method: str, s
                 returns_df=returns_df,
                 method=calculation_method
             )
-            print('Main PnL shape: ', str(combined_pos_df.shape))
+            logger.info('Main PnL shape: ', str(combined_pos_df.shape))
             if product == 'cotton':
                 combined_price_pos_df = load_from_pickle_in_dir(cob_date, f'combined_price_pos_{cob_date}.pkl')
                 long_price_pnl_df = generate_pnl_vectors(
@@ -241,10 +237,10 @@ def pnl_and_var_workflow(cob_date: str, product: str, calculation_method: str, s
                     returns_df=returns_df,
                     method=calculation_method
                 )
-                print('Price PnL shape: ', str(combined_price_pos_df.shape))
+                logger.info('Price PnL shape: ', str(combined_price_pos_df.shape))
             logger.info("STEP 3: PnL prepared")
         else:
-            raise NotImplementedError(f"Method '{calculation_method}' not supported yet.")
+            logger.error(f"Method '{calculation_method}' not supported yet.")
 
         if simulation_method == 'hist_sim':
             is_truncated = False
@@ -282,6 +278,7 @@ def pnl_and_var_workflow(cob_date: str, product: str, calculation_method: str, s
                 cob_date=cob_date,
                 window=window
             )
+            logger.info(f"STEP 4: PnL calculated")
 
         # Step 5: Calculate VaR
         var_report_df = build_var_report(var_df=var_data_df)
@@ -320,4 +317,4 @@ def pnl_and_var_workflow(cob_date: str, product: str, calculation_method: str, s
         logger.info(f"STEP 5: VaR Report saved successfully to {full_path_to_excel}")
 
     else:
-        logger.info(f'No positions for {product}. PnL and VaR not calculated.')
+        logger.warning(f'No positions for {product}. PnL and VaR not calculated.')

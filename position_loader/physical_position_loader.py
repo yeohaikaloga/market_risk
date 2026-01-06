@@ -5,6 +5,7 @@ from utils.contract_utils import get_month_code, custom_monthly_contract_sort_ke
 from datetime import datetime
 from utils.log_utils import get_logger
 
+logger = get_logger(__name__)
 fy24_unit_to_cotlook_basis_origin_dict = {'USA EQUITY': 'Memphis/Orleans/Texas', 'USA': 'Memphis/Orleans/Texas',
                                           'BRAZIL': 'Brazilian', 'SECO': "Ivory Coast Manbo/s",
                                           'W. AFRICA': "Burkina Faso Bola/s", 'TOGO': "Burkina Faso Bola/s",
@@ -105,7 +106,6 @@ class PhysicalPositionLoader(PositionLoader):
 
     # TODO finish up this loading of wood phy position
     def load_wood_phy_position_from_staging(self, cob_date: str) -> pd.DataFrame:
-        logger = get_logger(__name__)
         current_date_obj = datetime.strptime(cob_date, '%Y-%m-%d')
         df = pd.DataFrame()
         # Iterate from 0 to 9 days back to find data
@@ -403,3 +403,4 @@ class PhysicalPositionLoader(PositionLoader):
             print("All positions mapped to cob_date_fx.")
 
         return position_df
+
