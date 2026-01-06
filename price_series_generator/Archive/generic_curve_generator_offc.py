@@ -1,9 +1,7 @@
 from contract_ref_loader.derivatives_contract_ref_loader import DerivativesContractRefLoader
 from price_series_generator.price_series_generator import PriceSeriesGenerator
 import pandas as pd
-from utils.log_utils import get_logger
-import logging
-# logging.basicConfig(level = logging.WORNING)
+
 
 class GenericCurveGenerator(PriceSeriesGenerator):
 
@@ -59,11 +57,6 @@ class GenericCurveGenerator(PriceSeriesGenerator):
     def generate_generic_curve(self, position: int = 1, roll_days: int = 0, adjustment: str = None,
                                usd_conversion_mode: str = None, forex_mode: str = None, fx_spot_df: pd.DataFrame = None,
                                cob_date: str = None) -> pd.DataFrame:
-        logger = get_logger(__name__)
-
-        logger.info(f'running generate_generic_curve for position : {position}, roll_days : {roll_days},'
-                    f'usd_conversion_mode : {usd_conversion_mode}, forex_mode: {forex_mode}, cob_date : {cob_date}')
-
         """
         Generate the N-th generic futures curve with optional early rolling and backward adjustment.
 
@@ -89,12 +82,10 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             raise ValueError(f"Invalid adjustment method: {adjustment}. Must be None or {valid_adjustments}")
 
         self._prepare_curve_inputs(roll_days)
-        logger.debug("Prepared curve inputs")
         df = self.df.copy()
 
         if usd_conversion_mode == 'pre':
             if fx_spot_df is None:
-                logger.error("fx_spot_df is empty")
                 raise ValueError("fx_rates DataFrame must be provided for USD conversion")
 
             # Identify currency of the instrument from the futures contract
@@ -104,26 +95,21 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             else:
                 fx_rate = 'USD' + instrument_currency.upper()
                 if fx_rate not in fx_spot_df.columns:
-                    logger.error(f"FX rates for {fx_rate} not found in fx_rates DataFrame")
                     raise ValueError(f"FX rates for {fx_rate} not found in fx_rates DataFrame")
 
                 if forex_mode == 'cob_date_fx':
                     fx_rate = fx_spot_df.at[cob_date, fx_rate]
                     df = df.div(fx_rate, axis=0)
-                    logger.info(f"Applied COB date FX conversion using {fx_rate}={fx_rate_value}")
 
                 elif forex_mode == 'daily_fx':
                     df = df.div(fx_spot_df[fx_rate], axis=0)
 
                 else:
                     raise ValueError(f"forex mode for {forex_mode} not found in.")
-                logger.info("identifyed currency of the instrument")
 
         df = df.interpolate(method='linear', limit_direction='both', axis=0)  # interpolate after forex
-        logger.info("Interpolated missing values in futures price series")
 
         contracts = df.columns.tolist()
-        logger.debug(f"Contracts loaded: {contracts}")
         print('columns:', contracts)
         index = df.index
         generic_curve = pd.DataFrame(index=index,
@@ -135,14 +121,10 @@ class GenericCurveGenerator(PriceSeriesGenerator):
         # Load expiry and roll dates
         expiry_dates = self._contract_expiry_dates
         roll_dates = self._contract_roll_dates
-        logger.info(f"Expiry dates loaded: {expiry_dates}")
-        logger.info(f"Roll dates loaded: {roll_dates}")
         print('expiry:', expiry_dates)
         print('roll:', roll_dates)
-        logger.info("load expiry and roll dates")
 
         # STEP 1: Build unadjusted generic curve
-        logger.info("STEP 1: Starting to build unadjusted generic curve")
         for date in index:
             eligible_contracts = []
             for contract in contracts:
@@ -154,29 +136,23 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                     roll_date = roll_dates[full_contract_name]
                     expiry_date = expiry_dates[full_contract_name]
                     if roll_date is None or expiry_date is None:
-                        logger.warning(f"Missing roll/expiry date for {full_contract_name} on {date}")
                         continue  # skip if info missing
 
                     if date <= roll_date:
                         eligible_contracts.append(full_contract_name)
-            logger.debug(f"{date}: Eligible contracts = {eligible_contracts}")
-
 
             if len(eligible_contracts) >= position:
                 active_contract = eligible_contracts[position - 1].replace(' COMB', '').replace(' Comdty', '')
                 price = df.at[date, active_contract]
                 generic_curve.at[date, 'price_series_loader'] = price
                 generic_curve.at[date, 'active_contract'] = active_contract
-                logger.info(f"{date}: Selected active contract {active_contract} with price {price}")
             else:
                 generic_curve.at[date, 'price_series_loader'] = pd.NA
                 generic_curve.at[date, 'active_contract'] = None
-        logger.info("STEP 1.1: Finished building unadjusted generic curve")
 
         print(generic_curve.head())
         # STEP 2: Apply backward adjustment if requested
         if adjustment.lower() in {'ratio', 'difference'}:
-            logger.info("STEP 2: Starting backward adjustment | method=%s", adjustment)
             cumulative_ratio = 1.0
             cumulative_diff = 0.0
             adjustment_values = {}
@@ -191,9 +167,7 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                     adjusted_prices[date] = pd.NA
                     adjustment_values[date] = pd.NA
                     prev_contract = None
-                    logger.debug("STEP 2.1: Skipped %s (no price or contract)", date)
                     continue
-
 
                 # When contract_ref_loader changes (i.e., rolling happened)
                 if prev_contract and contract != prev_contract:
@@ -204,12 +178,9 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                         if adjustment == 'ratio' and to_price != 0:
                             ratio = from_price / to_price
                             cumulative_ratio *= ratio
-                            logger.info("STEP 2.2: Roll on %s, ratio=%f, cumulative=%f")
                         elif adjustment == 'difference':
                             diff = from_price - to_price
                             cumulative_diff += diff
-                            logger.info("STEP 2.3: Roll on %s, diff=%f, cumulative=%f")
-
 
                 # Apply adjustment
                 if adjustment == 'ratio':
@@ -229,21 +200,16 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             # Add adjusted prices to generic_curve DataFrame
             generic_curve['final_price'] = pd.Series(adjusted_prices)
             generic_curve['adjustment_values'] = pd.Series(adjustment_values)
-            logger.info("STEP 2.4: Finished backward adjustment")
 
         else:
             generic_curve['final_price'] = generic_curve['price_series_loader']
             generic_curve['adjustment_values'] = pd.NA
-            logger.info("STEP 2: No backward adjustment requested")
 
         if usd_conversion_mode == 'post':
-            logger.info("STEP 3: Starting post USD conversion")
             if fx_spot_df is None:
-                logger.error("fx_spot_df DataFrame must be provided for USD conversion")
                 raise ValueError("fx_spot_df DataFrame must be provided for USD conversion")
 
             if cob_date is None:
-                logger.error("cob_date must be provided for post USD conversion")
                 raise ValueError("cob_date must be provided for post USD conversion")
 
             instrument_currency = self.futures_contract.currency
@@ -251,7 +217,6 @@ class GenericCurveGenerator(PriceSeriesGenerator):
             if instrument_currency.upper() == 'USD':
                 # Already in USD
                 generic_curve['final_price_USD'] = generic_curve['final_price']
-                logger.info("Instrument already in USD, no conversion applied")
             else:
                 fx_rate = 'USD' + instrument_currency.upper()
                 if fx_rate not in fx_spot_df.columns:
@@ -272,14 +237,11 @@ class GenericCurveGenerator(PriceSeriesGenerator):
                     raise ValueError(f"forex mode for {forex_mode} not found in.")
 
                 generic_curve['final_price_USD'] = generic_curve['final_price'].div(generic_curve['fx_rate'], axis=0)
-                logger.info("USD conversion applied successfully")
         else:
             generic_curve['final_price_USD'] = generic_curve['final_price']
 
-
         # Fill any remaining NaNs forward
         generic_curve = generic_curve.ffill()
-        logger.info("Forward-filled NaN values in final curve")
         return generic_curve
 
     def generate_generic_curves_df_up_to(self, max_position: int, roll_days: int = 14,
