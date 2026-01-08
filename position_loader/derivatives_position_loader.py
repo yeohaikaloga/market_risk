@@ -628,3 +628,40 @@ class DerivativesPositionLoader(PositionLoader):
                     logger.warning(f"Fallback: {original} not in price_df, using {substituted} instead.")
 
         return deriv_pos_df
+
+    @staticmethod
+    def assign_cob_date_fx(position_df: pd.DataFrame, fx_df: pd.DataFrame, cob_date: str) -> pd.DataFrame:
+        """
+        Assign assign_cob_date_fx to each position row for a single cob_date.
+
+        Args:
+            position_df: DataFrame with columns ['generic_curve', ...].
+            fx_df: pivot-like DataFrame, index=cob_date, columns=USDfx.
+            cob_date: string date to extract prices for.
+        """
+        position_df = position_df.copy()
+
+        # Ensure index is datetime
+        fx_df = fx_df.copy()
+        fx_df.index = pd.to_datetime(fx_df.index)
+        cob_date_dt = pd.to_datetime(cob_date)
+
+        if cob_date_dt not in fx_df.index:
+            raise KeyError(f"cob_date {cob_date} not found in price_df index")
+
+        # Extract prices for this cob_date
+        fx_for_date = fx_df.loc[cob_date_dt]
+
+        # Map currency -> price
+        currency_key = 'USD' + position_df['currency']
+        position_df['cob_date_fx'] = currency_key.map(fx_for_date)
+
+        # Detect missing prices
+        missing = position_df['cob_date_fx'].isna()
+        if missing.any():
+            print(f"[WARN] {missing.sum()} positions missing cob_date_fx:")
+            print(position_df[missing][['currency']])
+        else:
+            print("All positions mapped to cob_date_fx.")
+
+        return position_df

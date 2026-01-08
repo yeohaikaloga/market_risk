@@ -71,6 +71,8 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
             deriv_pos_df['product_code']
             .apply(lambda x: extract_instrument_from_product_code(x, instrument_ref_dict))
         )
+        deriv_pos_df = derivatives_loader.assign_cob_date_price(deriv_pos_df, prices_df, cob_date)
+        deriv_pos_df = derivatives_loader.assign_cob_date_fx(deriv_pos_df, fx_spot_df, cob_date)
 
         # Add conversions
         deriv_pos_df['to_USD_conversion'] = deriv_pos_df['product_code'].map(
@@ -93,7 +95,8 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
                 (deriv_pos_df['settle_gamma_11'] + deriv_pos_df['settle_gamma_12'] + deriv_pos_df['settle_gamma_21'] +
                  deriv_pos_df['settle_gamma_22']) *
                 deriv_pos_df['lots_to_MT_conversion'] *
-                deriv_pos_df['to_USD_conversion']
+                deriv_pos_df['to_USD_conversion'] *
+                deriv_pos_df['cob_date_fx']
         )
         deriv_pos_df['vega'] = (
                 deriv_pos_df['total_active_lots'] *
@@ -103,16 +106,8 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
                 deriv_pos_df['total_active_lots'] *
                 deriv_pos_df['settle_theta'] * 5/7
         )
-        deriv_pos_df = derivatives_loader.assign_cob_date_price(deriv_pos_df, prices_df, cob_date)
-        deriv_pos_df['cob_date_fx'] = 1
-    logger.info("STEP 2B completed")
 
-    # Step 2C: Combine all positions
-    # combined_pos_df = pd.concat(
-    #     [deriv_pos_df],
-    #     axis=0,
-    #     ignore_index=True
-    # )
+    logger.info("STEP 2B completed")
 
     deriv_pos_df['product'] = product
     deriv_pos_df['cob_date'] = cob_date
@@ -121,12 +116,13 @@ def generate_rms_combined_position(cob_date: str, instrument_dict: Dict[str, Any
 
     logger.info(f"STEP 2C completed: Combined {product} position DataFrame generated. Shape: {deriv_pos_df.shape}")
     print(deriv_pos_df.head())
-
+    deriv_pos_df.to_csv('deriv_pos_df.csv')
     return deriv_pos_df
 
 
 def generate_rms_combined_position_from_screen(cob_date: str, instrument_dict: Dict[str, Any], prices_df: pd.DataFrame,
                                                fx_spot_df: pd.DataFrame) -> pd.DataFrame:
+    # Note: Delta and Gamma screens are in native currency (using BGN FX rate), not in USD.
     uat_engine = get_engine('uat')  # TODO: Switch to 'prod' in production
     instrument_ref_dict = load_instrument_ref_dict('uat')
     derivatives_loader = DerivativesPositionLoader(date=cob_date, source=uat_engine)

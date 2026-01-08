@@ -97,11 +97,8 @@ class SimulatedReturnsSeriesGenerator(PriceSeriesGenerator):
         """
         # dict_file = load_from_pickle_in_dir(cob_date, filename)
         # returns_df = dict_file["simulatedRet_df_ld"]
-        returns_df = load_from_csv_in_dir(cob_date, filename) # TEMP FIX!
-        print('done 1')
+        returns_df = load_from_pickle_in_dir(cob_date, filename)
         returns_df = cls.filter_relevant_risk_factors(returns_df, relevant_risk_factors)
-        print('done 2')
         returns_df = cls.rename_simulated_columns(returns_df)
-        print('done 3')
         return cls(returns_df, cob_date)
 

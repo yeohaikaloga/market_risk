@@ -32,6 +32,7 @@ def generate_rubber_combined_position(cob_date: str, instrument_dict: Dict[str, 
     conso_pos_df['purchases type'] = conso_pos_df['purchases type'].str.replace('PURCHASES', 'PURCHASE')
     conso_pos_df['typ'] = conso_pos_df['trade type'] + ' ' + conso_pos_df['purchases type']
 
+    #TODO Adjust for 2026 to include split for Midstream - Silvertree, Renata, Sourire
     rubber_unit_region_mapping = {
         'CAMBO TRAD': 'CAMBODIA',
         'CHINA TRAD': 'CHINA',

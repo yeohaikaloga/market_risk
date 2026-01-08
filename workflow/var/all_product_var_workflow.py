@@ -163,35 +163,35 @@ def product_position_workflow(cob_date: str, product: str, calculation_method: s
         save_to_csv_in_dir(combined_price_pos_df, cob_date, f'combined_price_pos_{cob_date}.csv')
 
 def monte_carlo_market_data_preparation_workflow(cob_date: str):
-    # simulated_returns_filename = 'daily_simulated_matrix_' + cob_date.replace('-', '') + '.pickle'
-    # destination_path = get_full_path(cob_date, simulated_returns_filename)
-    # file_exist = os.path.exists(destination_path)
-    # if not file_exist:
-    #     dir_date = cob_date.replace('-', '')
-    #     backup_dir = r"C:\Users\haikal.yeo\OneDrive - Olam Global Agri Pte Ltd\OGA_MR_GOO - Daily Time Series - Universe"
-    #     dir = os.path.join(backup_dir, dir_date)
-    #     source_path = os.path.join(dir, simulated_returns_filename)
-    #     if os.path.exists(source_path):
-    #         try:
-    #             # Copy the file from the backup location to the output directory
-    #             shutil.copy2(source_path, destination_path)
-    #             logger.info(f"Successfully copied missing simulated returns matrix from backup: {source_path}")
-    #         except Exception as e:
-    #             logger.error(f"Error copying file {source_path} to {destination_path}: {e}")
-    #             raise RuntimeError(f"Failed to copy required simulation file for {cob_date}.")
-    #     else:
-    #         error_msg = (f"Error: Required simulated returns file '{simulated_returns_filename}' is "
-    #                      f"missing in the output directory and backup location ({dir}). "
-    #                      f"Cannot proceed with 'mc_sim'.")
-    #         logger.error(error_msg)
-    # else:
-    #     logger.info(f"Simulated return matrix for {cob_date} already in folder.")
+    simulated_returns_filename = 'daily_simulated_matrix_cotton_' + cob_date.replace('-', '') + '.pickle'
+    destination_path = get_full_path(cob_date, simulated_returns_filename)
+    file_exist = os.path.exists(destination_path)
+    if not file_exist:
+        dir_date = cob_date.replace('-', '')
+        backup_dir = r"C:\Users\haikal.yeo\OneDrive - Olam Global Agri Pte Ltd\OGA_MR_GOO - Daily Time Series - Universe"
+        dir = os.path.join(backup_dir, dir_date)
+        source_path = os.path.join(dir, simulated_returns_filename)
+        if os.path.exists(source_path):
+            try:
+                # Copy the file from the backup location to the output directory
+                shutil.copy2(source_path, destination_path)
+                logger.info(f"Successfully copied missing simulated returns matrix from backup: {source_path}")
+            except Exception as e:
+                logger.error(f"Error copying file {source_path} to {destination_path}: {e}")
+                raise RuntimeError(f"Failed to copy required simulation file for {cob_date}.")
+        else:
+            error_msg = (f"Error: Required simulated returns file '{simulated_returns_filename}' is "
+                         f"missing in the output directory and backup location ({dir}). "
+                         f"Cannot proceed with 'mc_sim'.")
+            logger.error(error_msg)
+    else:
+        logger.info(f"Simulated return matrix for {cob_date} already in folder.")
     #returns_df = load_from_csv_in_dir(cob_date, f'simulatedRet_df_ld_20260102.csv')
     relevant_risk_factors = (['CT', 'VV', 'AVY', 'OR', 'JN', 'SRB', 'BDR', 'RG', 'RT', 'C', 'W', 'S', 'AIndex',
                              'MeOrTe', 'IvCoMa', 'BuFaBo', 'BrCo', 'Shankar6', 'GaSu', 'MaizeUP', 'SawnAvg'] +
                              product_specifications['rms']['instrument_list'])
     mc_returns_generator = (SimulatedReturnsSeriesGenerator.
-                            load_relevant_simulated_returns(cob_date, 'simulatedRet_df_ld_20260102.csv', #simulated_returns_filename,
+                            load_relevant_simulated_returns(cob_date, simulated_returns_filename,
                                                             relevant_risk_factors))
     returns_df = mc_returns_generator.price_df
     #returns_df = load_from_pickle_in_dir(cob_date, f'hist_relative_returns_{cob_date}.pkl')

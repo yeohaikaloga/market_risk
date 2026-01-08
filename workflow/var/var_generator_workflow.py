@@ -209,12 +209,12 @@ def generate_var(product, combined_pos_df, long_pnl_df, simulation_method, calcu
         region_aggregate_map = get_wood_aggregates(combined_pos_df['region'].unique())
 
     var_data_df = build_position_index_df(pnl_analyzer, region_aggregate_map)
+
     # Step 3: Run VaR calculation
-    if product == 'rms':
-        two_tail = False
+    if product == 'rms' or simulation_method == 'mc_sim':
+        is_two_tail = False
     else:
-        two_tail = True
-    print(product, two_tail)
+        is_two_tail = True
     var_data_df = calculate_var_for_regions(
         var_data_df=var_data_df,
         analyzer=pnl_analyzer,
@@ -222,7 +222,7 @@ def generate_var(product, combined_pos_df, long_pnl_df, simulation_method, calcu
         calculation_method=calculation_method,
         cob_date=cob_date,
         window=window,
-        two_tail=two_tail
+        is_two_tail=is_two_tail
     )
 
     return var_data_df
@@ -321,43 +321,47 @@ def build_cotton_var_report_exceptions(long_pnl_df: pd.DataFrame, combined_pos_d
     new_index = [replace_suffix(unit) for unit in report_df.index]
     report_df.index = new_index
 
-    # Step 4: Apply the relevant definitions for the aggregates with exclusions (ex. CP/JS/US EQ)
-    sum_origin_o = var_df[(var_df['region_agg'] == 'SUM ORIGIN EX CP/JS/US EQ[O]') & (var_df['instrument_name'] == 'COTTON')].index[0]
-    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'outright_pos'] = var_df.loc[sum_origin_o, 'outright_pos']
-    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'outright_95_var'] = var_df.loc[sum_origin_o, 'outright_95_var']
-    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'outright_99_var'] = var_df.loc[sum_origin_o, 'outright_99_var']
-    sum_origin_b = var_df[(var_df['region_agg'] == 'SUM ORIGIN EX CP/JS/US EQ[B]') & (var_df['instrument_name'] == 'COTTON')].index[0]
-    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'basis_pos'] = var_df.loc[sum_origin_b, 'basis_pos']
-    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'basis_95_var'] = var_df.loc[sum_origin_b, 'basis_95_var']
-    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'basis_99_var'] = var_df.loc[sum_origin_b, 'basis_99_var']
+    # Step 4: Apply the relevant definitions for the aggregates with exclusions (ex. CP/JS/US EQ OR)
+    sum_origin_o_c = var_df[(var_df['region_agg'] == 'SUM ORIGIN EX CP/JS/US EQ[O]') & (var_df['instrument_name'] == 'COTTON')].index[0]
+    sum_origin_o_all = var_df[(var_df['region_agg'] == 'SUM ORIGIN EX CP/JS/US EQ[O]') & (var_df['instrument_name'] == 'ALL')].index[0]
+    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'outright_pos'] = var_df.loc[sum_origin_o_c, 'outright_pos']
+    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'outright_95_var'] = var_df.loc[sum_origin_o_all, 'outright_95_var']
+    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'outright_99_var'] = var_df.loc[sum_origin_o_all, 'outright_99_var']
+    sum_origin_b_c = var_df[(var_df['region_agg'] == 'SUM ORIGIN EX CP/JS/US EQ[B]') & (var_df['instrument_name'] == 'COTTON')].index[0]
+    sum_origin_b_all = var_df[(var_df['region_agg'] == 'SUM ORIGIN EX CP/JS/US EQ[B]') & (var_df['instrument_name'] == 'ALL')].index[0]
+    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'basis_pos'] = var_df.loc[sum_origin_b_c, 'basis_pos']
+    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'basis_95_var'] = var_df.loc[sum_origin_b_all, 'basis_95_var']
+    report_df.loc['SUM ORIGIN EX CP/JS/US EQ', 'basis_99_var'] = var_df.loc[sum_origin_b_all, 'basis_99_var']
 
-    sum_cotton_o = var_df[(var_df['region_agg'] == 'SUM COTTON EX CP/JS/US EQ[O]') & (var_df['instrument_name'] == 'COTTON')].index[0]
-    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'outright_pos'] = var_df.loc[sum_cotton_o, 'outright_pos']
-    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'outright_95_var'] = var_df.loc[sum_cotton_o, 'outright_95_var']
-    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'outright_99_var'] = var_df.loc[sum_cotton_o, 'outright_99_var']
-    sum_cotton_b = var_df[(var_df['region_agg'] == 'SUM COTTON EX CP/JS/US EQ[B]') & (var_df['instrument_name'] == 'COTTON')].index[0]
-    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'basis_pos'] = var_df.loc[sum_cotton_b, 'basis_pos']
-    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'basis_95_var'] = var_df.loc[sum_cotton_b, 'basis_95_var']
-    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'basis_99_var'] = var_df.loc[sum_cotton_b, 'basis_99_var']
+    sum_cotton_o_c = var_df[(var_df['region_agg'] == 'SUM COTTON EX CP/JS/US EQ[O]') & (var_df['instrument_name'] == 'COTTON')].index[0]
+    sum_cotton_o_all = var_df[(var_df['region_agg'] == 'SUM COTTON EX CP/JS/US EQ[O]') & (var_df['instrument_name'] == 'ALL')].index[0]
+    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'outright_pos'] = var_df.loc[sum_cotton_o_c, 'outright_pos']
+    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'outright_95_var'] = var_df.loc[sum_cotton_o_all, 'outright_95_var']
+    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'outright_99_var'] = var_df.loc[sum_cotton_o_all, 'outright_99_var']
+    sum_cotton_b_c = var_df[(var_df['region_agg'] == 'SUM COTTON EX CP/JS/US EQ[B]') & (var_df['instrument_name'] == 'COTTON')].index[0]
+    sum_cotton_b_all = var_df[(var_df['region_agg'] == 'SUM COTTON EX CP/JS/US EQ[B]') & (var_df['instrument_name'] == 'ALL')].index[0]
+    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'basis_pos'] = var_df.loc[sum_cotton_b_c, 'basis_pos']
+    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'basis_95_var'] = var_df.loc[sum_cotton_b_all, 'basis_95_var']
+    report_df.loc['SUM COTTON EX CP/JS/US EQ', 'basis_99_var'] = var_df.loc[sum_cotton_b_all, 'basis_99_var']
 
     exception_cotton_var_data_df = pd.DataFrame(columns=var_df.columns)
     sum_origin_ex_row = {
         'region_agg': 'SUM ORIGIN EX CP/JS/US EQ',
         'level': 'agg',
         'instrument_name': 'ALL',
-        'outright_position_index_list': var_df.loc[sum_origin_o, 'outright_position_index_list'],
-        'no_of_outright_positions': len(var_df.loc[sum_origin_o, 'outright_position_index_list']),
-        'basis_position_index_list': var_df.loc[sum_origin_b, 'basis_position_index_list'],
-        'no_of_basis_positions': len(var_df.loc[sum_origin_b, 'basis_position_index_list']),
+        'outright_position_index_list': var_df.loc[sum_origin_o_all, 'outright_position_index_list'],
+        'no_of_outright_positions': len(var_df.loc[sum_origin_o_all, 'outright_position_index_list']),
+        'basis_position_index_list': var_df.loc[sum_origin_b_all, 'basis_position_index_list'],
+        'no_of_basis_positions': len(var_df.loc[sum_origin_b_all, 'basis_position_index_list']),
     }
     sum_cotton_ex_row = {
         'region_agg': 'SUM COTTON EX CP/JS/US EQ',
         'level': 'agg',
         'instrument_name': 'ALL',
-        'outright_position_index_list': var_df.loc[sum_cotton_o, 'outright_position_index_list'],
-        'no_of_outright_positions': len(var_df.loc[sum_cotton_o, 'outright_position_index_list']),
-        'basis_position_index_list': var_df.loc[sum_cotton_b, 'basis_position_index_list'],
-        'no_of_basis_positions': len(var_df.loc[sum_cotton_b, 'basis_position_index_list']),
+        'outright_position_index_list': var_df.loc[sum_cotton_o_all, 'outright_position_index_list'],
+        'no_of_outright_positions': len(var_df.loc[sum_cotton_o_all, 'outright_position_index_list']),
+        'basis_position_index_list': var_df.loc[sum_cotton_b_all, 'basis_position_index_list'],
+        'no_of_basis_positions': len(var_df.loc[sum_cotton_b_all, 'basis_position_index_list']),
     }
 
     exception_cotton_var_data_df = pd.concat([exception_cotton_var_data_df, pd.DataFrame([sum_origin_ex_row, sum_cotton_ex_row])], ignore_index=True)
@@ -369,7 +373,7 @@ def build_cotton_var_report_exceptions(long_pnl_df: pd.DataFrame, combined_pos_d
         calculation_method=calculation_method,
         cob_date=cob_date,
         window=window,
-        two_tail=True
+        is_two_tail=True
     )
     sum_origin_ov = exception_cotton_var_data_df[
         exception_cotton_var_data_df['region_agg'] == 'SUM ORIGIN EX CP/JS/US EQ'

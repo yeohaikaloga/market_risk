@@ -108,8 +108,8 @@ class PhysicalPositionLoader(PositionLoader):
     def load_wood_phy_position_from_staging(self, cob_date: str) -> pd.DataFrame:
         current_date_obj = datetime.strptime(cob_date, '%Y-%m-%d')
         df = pd.DataFrame()
-        # Iterate from 0 to 9 days back to find data
-        for days_back in range(10):
+        # Iterate from 0 to 30 days back to find data
+        for days_back in range(31):
             target_date = (current_date_obj - pd.Timedelta(days=days_back)).strftime('%Y-%m-%d')
 
             try:
@@ -164,8 +164,8 @@ class PhysicalPositionLoader(PositionLoader):
         current_date_obj = datetime.strptime(cob_date, '%Y-%m-%d')
         df = pd.DataFrame()
 
-        # Iterate from 0 to 9 days back
-        for days_back in range(10):
+        # Iterate from 0 to 30 days back
+        for days_back in range(31):
             target_date = (current_date_obj - pd.Timedelta(days=days_back)).strftime('%Y-%m-%d')
 
             try:

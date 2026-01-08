@@ -8,7 +8,7 @@ class VaRCalculator:
     @staticmethod
     def calculate_var(lookback_df: pd.DataFrame, inverse_df: pd.DataFrame, simulation_method: str,
                       calculation_method: str, cob_date: str, percentile: float = 95, window: int = 260,
-                      two_tail: bool = True) -> float:
+                      is_two_tail: bool = True) -> float:
         """
         Calculates VaR using a single interface, supporting both Historical (hist_sim) and Monte Carlo (mc_sim)
         simulations. The final VaR is derived from the maximum loss across two PnL distributions
@@ -72,13 +72,12 @@ class VaRCalculator:
             inverse_tail = inverse_total
 
         tail_q = (100 - percentile) / 100.0
-        if two_tail:
-            lookback_var = -lookback_tail.quantile(tail_q)
-            inverse_var = -inverse_tail.quantile(tail_q)
-
+        if is_two_tail:
+            lookback_var = abs(lookback_tail.quantile(tail_q))
+            inverse_var = abs(inverse_tail.quantile(tail_q))
             # VaR is the maximum of the two loss scenarios
             return max(lookback_var, inverse_var)
 
         else:
-            return lookback_tail.quantile(tail_q)
+            return abs(lookback_tail.quantile(tail_q))
 

@@ -39,12 +39,6 @@ if __name__ == '__main__':
         print("DEBUG: Starting Try block")
         root_logger.info("BEGIN RUN")
 
-        # path = "J:\RISK\RISK CENTRAL SINGAPORE\Risk Reports created by RO\Cotton\Cotton_timeseries\daily_simulated_matrix_20260102.pickle"
-        # # path = r"C:\Users\haikal.yeo\OneDrive - Olam Global Agri Pte Ltd\Desktop\test\daily_simulated_2020102.pickle"
-        # with open(path, 'rb') as f:
-        #     data = pickle.load(f)
-        # print('done')
-
         # cob_date = '2025-12-08'
         # date_formatted = cob_date.replace('-', '')
         # base_name = f'eo_simulation_vector_{date_formatted}'
@@ -56,7 +50,7 @@ if __name__ == '__main__':
         #     raise
         # print("done")
         app_name = 'VaR_Calculator_2026'
-        cob_date = '2026-01-02'
+        cob_date = '2026-01-05'
         #fy24_cotton_basis_workflow(cob_date, 260)
         log_file = f'summary_logs_for_{app_name}_{cob_date}.txt'
         print("DEBUG: Setting up logging...")
@@ -68,9 +62,12 @@ if __name__ == '__main__':
         # data = pd.read_feather(r'C:\Users\haikal.yeo\OneDrive - Olam Global Agri Pte Ltd\Fibre, Agri-Industrials & Ag Services\market_risk\reference\pnl_portfolio_taylor_relative_2025-12-19.feather')
         # data.to_csv('pnl_portfolio_taylor_relative_2025-12-19.csv')
         print("DEBUG: Starting all_product_var_workflow...")
-        all_product_var_workflow(cob_date, product=['cotton', 'rubber', 'wood', 'biocane'], simulation_method=['mc_sim'],
-                                 calculation_method=['linear', 'sensitivity_matrix'])
-        #TODO fix mapping of options to correct curve, particularly for RMS.
+        all_product_var_workflow(cob_date, product=['rms'],
+                                 simulation_method=['mc_sim'],
+                                 calculation_method=['taylor_series'])
+        # all_product_var_workflow(cob_date, product=['cotton'], simulation_method=['mc_sim'],
+        #                          calculation_method=['sensitivity_matrix'])
+        #TODO fix mapping of options to correct curve, check for CRD (FX issues) particularly for RMS.
         #TODO Adjust file path so that Jaya can run on his side
         print("DEBUG: Workflow finished successfully")
         workflow_logger.info("END RUN")

@@ -66,17 +66,21 @@ class SensitivityMatrixLoader:
                 rbc_query = f"""
                     SELECT china_rubber_sensitivity_report 
                     FROM staging.opera_sensitivity_reports 
-                    WHERE staging.opera_sensitivity_reports.cob_date = '{self.cob_date}
-                    '"""
+                    WHERE staging.opera_sensitivity_reports.cob_date = '{self.cob_date}'
+                    """
 
                 json_string_rbc, count_rbc = execute_and_extract(conn, rbc_query, 'china_rubber_sensitivity_report')
+
                 if json_string_rbc:
                     logger.info(f"Found sensitivity matrix for China rubber on {self.cob_date}.")
                     df_rbc = pd.read_json(json_string_rbc)
                 else:
                     logger.warning(f"No sensitivity report found for China rubber on {self.cob_date}.")
 
-                df = pd.concat([df_rba, df_rbc], ignore_index=True)
+                if json_string_rba or json_string_rbc:
+                    df = pd.concat([df_rba, df_rbc], ignore_index=True)
+                else:
+                    return pd.DataFrame()
 
             df['match_key'] = (df['subportfolio'].astype(str) + '|' +
                                df['strike'].astype(str) + '|' +

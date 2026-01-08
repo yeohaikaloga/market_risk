@@ -34,7 +34,7 @@ def _get_pnl_pivots(analyzer: PnLAnalyzer, values: List[str]) -> Dict[str, pd.Da
 
 def calculate_var_for_regions(var_data_df: pd.DataFrame, analyzer: PnLAnalyzer, simulation_method: str,
                               calculation_method: str, cob_date: str, window: int, percentiles: List[int] = [95, 99],
-                              two_tail: bool = True) \
+                              is_two_tail: bool = True) \
         -> pd.DataFrame:
     var_calc = VaRCalculator()
     position_df = analyzer.position_df
@@ -96,17 +96,17 @@ def calculate_var_for_regions(var_data_df: pd.DataFrame, analyzer: PnLAnalyzer, 
 
             outright_var = var_calc.calculate_var(
                 outright_lookback, outright_inverse, simulation_method, calculation_method, cob_date, p, window,
-                two_tail
+                is_two_tail
             ) if not outright_lookback.empty else 0
 
             basis_var = var_calc.calculate_var(
                 basis_lookback, basis_inverse, simulation_method, calculation_method, cob_date, p, window,
-                two_tail
+                is_two_tail
             ) if not basis_lookback.empty else 0
 
             overall_var = var_calc.calculate_var(
                 overall_lookback, overall_inverse, simulation_method, calculation_method, cob_date, p, window,
-                two_tail
+                is_two_tail
             ) if not overall_lookback.empty else 0
 
             var_data_df.at[i, f'outright_{p}_var'] = int(outright_var) if not pd.isna(outright_var) else None

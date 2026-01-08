@@ -38,7 +38,7 @@ def monte_carlo_var_workflow(cob_date: str, product: str, simulation_method: str
     if True:
         relevant_risk_factors = ['CT', 'VV', 'AVY', 'OR', 'JN', 'SRB', 'BDR', 'RG', 'RT', 'C', 'W', 'S', 'AIndex',
                                  'MeOrTe', 'IvCoMa', 'BuFaBo', 'BrCo', 'Shankar6', 'GaSu', 'MaizeUP', 'SawnAvg']
-        simulated_returns_filename = 'daily_simulated_matrix_' + cob_date.replace('-','')
+        simulated_returns_filename = 'daily_simulated_matrix_cotton_' + cob_date.replace('-','')
         mc_returns_generator = SimulatedReturnsSeriesGenerator.load_relevant_simulated_returns(simulated_returns_filename,
                                                                                                relevant_risk_factors)
         simulated_mc_returns_df = mc_returns_generator.price_df.head()
